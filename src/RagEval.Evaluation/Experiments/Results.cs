@@ -5,7 +5,16 @@ public sealed record QueryResult(string QueryId, double Ndcg10, double Recall10,
     bool? AnswerHit5, bool? AnswerHit10, IReadOnlyList<string> Top10Documents, double EmbedMs, double SearchMs);
 
 /// <summary>How the corpus was indexed for a run.</summary>
-public sealed record IndexSummary(string Collection, int Documents, int Chunks, long Characters, double Seconds, bool Reused);
+/// <param name="Collection">Qdrant collection.</param>
+/// <param name="Documents">Documents indexed.</param>
+/// <param name="Chunks">Chunks (= vectors) stored.</param>
+/// <param name="Characters">Characters of chunk text stored.</param>
+/// <param name="Seconds">Time it took to build the index (also when reused: from when it was built).</param>
+/// <param name="Reused">The index existed and was reused by this run.</param>
+/// <param name="Dimensions">Embedding size.</param>
+/// <param name="VectorBytes">Raw float32 vector storage: chunks × dimensions × 4.</param>
+public sealed record IndexSummary(string Collection, int Documents, int Chunks, long Characters, double Seconds, bool Reused,
+    int Dimensions, long VectorBytes);
 
 /// <summary>Latency percentiles, in milliseconds.</summary>
 public sealed record Latency(double P50, double P95);

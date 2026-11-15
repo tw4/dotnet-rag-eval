@@ -48,6 +48,8 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
         return config.Strategy switch
         {
             "fixed" => new FixedSizeChunker(config.Size, config.Overlap),
+            "structural" => new StructuralChunker(config.Size),
+            "sentence-window" => new SentenceWindowChunker(config.Window),
             _ => throw new NotSupportedException($"Unknown chunking strategy '{config.Strategy}'."),
         };
     }
@@ -130,7 +132,8 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
         {
             Dataset = dataset,
             Run = run,
-            Index = new IndexSummary(index.Collection, index.Documents, index.Chunks, index.Characters, index.Elapsed.TotalSeconds, index.Reused),
+            Index = new IndexSummary(index.Collection, index.Documents, index.Chunks, index.Characters, index.Elapsed.TotalSeconds,
+                index.Reused, index.Dimensions, index.VectorBytes),
             Queries = perQuery.Count,
             Metrics = metrics,
             Ndcg10Ci95 = [ci.Low, ci.High],

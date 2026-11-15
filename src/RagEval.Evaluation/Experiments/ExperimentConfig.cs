@@ -6,12 +6,17 @@ namespace RagEval.Evaluation.Experiments;
 /// <summary>How a run chunks documents.</summary>
 public sealed record ChunkingConfig
 {
-    /// <summary><c>fixed</c> (more strategies arrive with the chunking experiment).</summary>
+    /// <summary><c>fixed</c>, <c>structural</c> or <c>sentence-window</c>.</summary>
     public string Strategy { get; init; } = "fixed";
 
+    /// <summary>Largest chunk in characters (fixed, structural).</summary>
     public int Size { get; init; } = 1000;
 
+    /// <summary>Characters shared by consecutive chunks (fixed).</summary>
     public int Overlap { get; init; } = 200;
+
+    /// <summary>Sentences of context on each side (sentence-window).</summary>
+    public int Window { get; init; } = 2;
 }
 
 /// <summary>Which embedding model a run uses.</summary>

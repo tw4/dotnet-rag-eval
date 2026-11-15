@@ -11,7 +11,12 @@ using RagEval.Core.Indexing;
 namespace RagEval.Evaluation.Datasets;
 
 /// <summary>What <see cref="CorpusIndex.EnsureAsync"/> did.</summary>
-public sealed record IndexResult(string Collection, int Documents, int Chunks, long Characters, TimeSpan Elapsed, bool Reused);
+public sealed record IndexResult(string Collection, int Documents, int Chunks, long Characters, TimeSpan Elapsed, bool Reused,
+    int Dimensions = 0)
+{
+    /// <summary>Raw size of the stored vectors (float32), in bytes.</summary>
+    public long VectorBytes => (long)Chunks * Dimensions * sizeof(float);
+}
 
 /// <summary>
 /// Indexes a dataset's corpus into its own Qdrant collection, one per configuration (dataset,
@@ -54,7 +59,9 @@ public sealed class CorpusIndex(QdrantClient client, IChunker chunker, Embedder 
         {
             return new IndexResult(name, int.Parse(metadata["documents"], CultureInfo.InvariantCulture),
                 int.Parse(metadata["chunks"], CultureInfo.InvariantCulture), long.Parse(metadata["characters"], CultureInfo.InvariantCulture),
-                TimeSpan.Zero, Reused: true);
+                TimeSpan.FromSeconds(double.Parse(metadata.GetValueOrDefault("seconds", "0"), CultureInfo.InvariantCulture)), Reused: true,
+                metadata.TryGetValue("dimensions", out var d) ? int.Parse(d, CultureInfo.InvariantCulture)
+                    : await store.GetDimensionsAsync(cancellationToken));
         }
 
         var watch = Stopwatch.StartNew();
@@ -62,6 +69,7 @@ public sealed class CorpusIndex(QdrantClient client, IChunker chunker, Embedder 
         int documents = 0, chunks = 0;
         long characters = 0;
         var created = false;
+        var dimensions = 0;
 
         async Task FlushAsync()
         {
@@ -70,10 +78,11 @@ public sealed class CorpusIndex(QdrantClient client, IChunker chunker, Embedder 
                 return;
             }
 
-            var vectors = await embedder.EmbedDocumentsAsync([.. pending.Select(p => p.Chunk.Text)], cancellationToken);
+            var vectors = await embedder.EmbedDocumentsAsync([.. pending.Select(p => p.Chunk.TextToEmbed)], cancellationToken);
             if (!created)
             {
-                await store.EnsureCollectionAsync(vectors[0].Length, recreate: true, cancellationToken);
+                dimensions = vectors[0].Length;
+                await store.EnsureCollectionAsync(dimensions, recreate: true, cancellationToken);
                 created = true;
             }
 
@@ -110,7 +119,8 @@ public sealed class CorpusIndex(QdrantClient client, IChunker chunker, Embedder 
             ["chunks"] = chunks.ToString(CultureInfo.InvariantCulture),
             ["characters"] = characters.ToString(CultureInfo.InvariantCulture),
             ["seconds"] = watch.Elapsed.TotalSeconds.ToString("F1", CultureInfo.InvariantCulture),
+            ["dimensions"] = dimensions.ToString(CultureInfo.InvariantCulture),
         }, cancellationToken);
-        return new IndexResult(name, documents, chunks, characters, watch.Elapsed, Reused: false);
+        return new IndexResult(name, documents, chunks, characters, watch.Elapsed, Reused: false, dimensions);
     }
 }
