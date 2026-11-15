@@ -73,6 +73,12 @@ public sealed record AnsweringConfig
     public int TopK { get; init; } = 5;
 }
 
+/// <summary>The model that judges generated answers (answer experiments only).</summary>
+public sealed record JudgeConfig
+{
+    public string Model { get; init; } = "qwen3:8b";
+}
+
 /// <summary>One configuration of the pipeline to evaluate.</summary>
 public sealed record RunConfig
 {
@@ -107,6 +113,9 @@ public sealed record ExperimentConfig
     public required IReadOnlyList<string> Datasets { get; init; }
 
     public required IReadOnlyList<RunConfig> Runs { get; init; }
+
+    /// <summary>Set for answer experiments (<c>rag-eval eval answers</c>): who judges the answers.</summary>
+    public JudgeConfig? Judge { get; init; }
 
     public static ExperimentConfig Load(string path)
     {
