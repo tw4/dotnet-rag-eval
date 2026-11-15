@@ -12,10 +12,13 @@ namespace RagEval.Evaluation.Datasets;
 
 /// <summary>What <see cref="CorpusIndex.EnsureAsync"/> did.</summary>
 public sealed record IndexResult(string Collection, int Documents, int Chunks, long Characters, TimeSpan Elapsed, bool Reused,
-    int Dimensions = 0)
+    int Dimensions = 0, long? SparseBytes = null)
 {
-    /// <summary>Raw size of the stored vectors (float32), in bytes.</summary>
-    public long VectorBytes => (long)Chunks * Dimensions * sizeof(float);
+    /// <summary>
+    /// Raw size of the stored vectors, in bytes: float32 per dimension for dense vectors, or for
+    /// sparse ones 8 bytes (a 32-bit id and a float32 weight) per non-zero entry.
+    /// </summary>
+    public long VectorBytes => SparseBytes ?? (long)Chunks * Dimensions * sizeof(float);
 }
 
 /// <summary>

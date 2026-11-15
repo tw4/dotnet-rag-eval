@@ -62,10 +62,8 @@ public sealed class ExperimentTests : IDisposable
         Assert.Equal((low, high), Statistics.BootstrapCi95(values));   // fixed seed: reproducible
     }
 
-    [Fact]
-    public async Task Runs_an_experiment_end_to_end_and_writes_reports()
+    private DatasetInfo WriteTinyDataset()
     {
-        using var qdrant = QdrantFixture.ClientOrSkip();
         Directory.CreateDirectory(Path.Combine(_dir, "tiny", "qrels"));
         Write("tiny/corpus.jsonl", """
             {"_id": "pets", "title": "Pets", "text": "Cats sleep most of the day. Dogs enjoy long walks in the park."}
@@ -80,7 +78,74 @@ public sealed class ExperimentTests : IDisposable
             {"query-id": "q1", "corpus-id": "space", "score": 1}
             {"query-id": "q2", "corpus-id": "pets", "score": 1}
             """);
-        var info = new DatasetInfo("tiny", "tiny", "en", "t", "x", "x", "x", "beir-jsonl", "test", [], new DatasetSize(3, 2, 2));
+        return new DatasetInfo("tiny", "tiny", "en", "t", "x", "x", "x", "beir-jsonl", "test", [], new DatasetSize(3, 2, 2));
+    }
+
+    [Fact]
+    public async Task Runs_sparse_and_hybrid_retrieval()
+    {
+        using var qdrant = QdrantFixture.ClientOrSkip();
+        var info = WriteTinyDataset();
+        var chunking = new ChunkingConfig { Size = 60, Overlap = 10 };
+        var experiment = new ExperimentConfig
+        {
+            Name = "unit-hybrid",
+            Datasets = ["tiny"],
+            Runs =
+            [
+                new RunConfig { Name = "bm25", Chunking = chunking, Retrieval = new RetrievalConfig { Strategy = "sparse", Analyzer = "prefix-4" } },
+                new RunConfig { Name = "hybrid", Chunking = chunking, Embedding = new EmbeddingConfig { Model = "hash" },
+                    Retrieval = new RetrievalConfig { Strategy = "hybrid", Analyzer = "prefix-4" } },
+            ],
+        };
+        var embedded = new List<string>();
+        var runner = new ExperimentRunner(qdrant, new(), (_, _) => Task.FromResult(EvalDataset.Load(info, _dir)))
+        {
+            EmbeddingsFor = model =>
+            {
+                embedded.Add(model);
+                return new HashingEmbeddingGenerator();
+            },
+        };
+        var collections = new List<string>();
+        try
+        {
+            var result = await runner.RunAsync(experiment, TestContext.Current.CancellationToken);
+            collections.AddRange(result.Runs.SelectMany(r => r.Index.Collection.Split(" + ")).Distinct());
+
+            Assert.Equal(["hash"], embedded);                       // the sparse run embeds nothing
+            var (sparse, hybrid) = (result.Runs[0], result.Runs[1]);
+            Assert.Equal(1.0, sparse.Metrics["recall@10"]);
+            Assert.Equal("space", sparse.PerQuery[0].Top10Documents[0]);
+            Assert.Equal(1.0, hybrid.Metrics["ndcg@10"]);
+            Assert.Equal(0, sparse.Index.Dimensions);
+            Assert.True(sparse.Index.VectorBytes > 0);
+            Assert.Contains(" + ", hybrid.Index.Collection, StringComparison.Ordinal);
+            Assert.Equal(sparse.Index.Chunks, hybrid.Index.Chunks);  // same chunks in both indexes
+            Assert.True(hybrid.Index.VectorBytes > sparse.Index.VectorBytes);
+
+            var again = await runner.RunAsync(experiment, TestContext.Current.CancellationToken);
+            Assert.All(again.Runs, r => Assert.True(r.Index.Reused));
+            Assert.Equal(sparse.Metrics["ndcg@10"], again.Runs[0].Metrics["ndcg@10"]);
+
+            var (_, markdown) = ReportWriter.Write(result, Path.Combine(_dir, "out-hybrid"));
+            Assert.Contains("| bm25 | **1.000** |", await File.ReadAllTextAsync(markdown, TestContext.Current.CancellationToken),
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            foreach (var collection in collections)
+            {
+                await qdrant.DeleteCollectionAsync(collection, cancellationToken: CancellationToken.None);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Runs_an_experiment_end_to_end_and_writes_reports()
+    {
+        using var qdrant = QdrantFixture.ClientOrSkip();
+        var info = WriteTinyDataset();
         var experiment = new ExperimentConfig
         {
             Name = "unit",

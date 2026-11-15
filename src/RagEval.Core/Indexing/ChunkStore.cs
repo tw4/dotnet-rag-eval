@@ -18,6 +18,9 @@ public sealed class ChunkStore(QdrantClient client, string collection)
 {
     public const string DenseVector = "dense";
 
+    /// <summary>Name of the BM25 sparse vector in collections made by <see cref="EnsureSparseCollectionAsync"/>.</summary>
+    public const string SparseVectorName = "bm25";
+
     public string Collection { get; } = collection;
 
     /// <summary>Creates the collection if needed; fails if it exists with another vector size.</summary>
@@ -48,6 +51,61 @@ public sealed class ChunkStore(QdrantClient client, string collection)
             new VectorParamsMap { Map = { [DenseVector] = new VectorParams { Size = (ulong)dimensions, Distance = Distance.Cosine } } },
             cancellationToken: cancellationToken);
         await client.CreatePayloadIndexAsync(Collection, "document_id", PayloadSchemaType.Keyword, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates (or recreates) a collection that holds only BM25 sparse vectors. Qdrant keeps the
+    /// document frequency of every term and applies the IDF at query time (<c>Modifier.Idf</c>).
+    /// </summary>
+    public async Task EnsureSparseCollectionAsync(bool recreate = false, CancellationToken cancellationToken = default)
+    {
+        if (await client.CollectionExistsAsync(Collection, cancellationToken))
+        {
+            if (!recreate)
+            {
+                return;
+            }
+
+            await client.DeleteCollectionAsync(Collection, cancellationToken: cancellationToken);
+        }
+
+        await client.CreateCollectionAsync(new CreateCollection
+        {
+            CollectionName = Collection,
+            SparseVectorsConfig = new SparseVectorConfig
+            {
+                Map = { [SparseVectorName] = new SparseVectorParams { Modifier = Modifier.Idf } },
+            },
+        }, cancellationToken);
+        await client.CreatePayloadIndexAsync(Collection, "document_id", PayloadSchemaType.Keyword, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Adds chunks with their BM25 vectors in bulk (for freshly created sparse collections).</summary>
+    public async Task UpsertSparseAsync(IReadOnlyList<(Document Document, Chunk Chunk, SparseVector Vector)> items,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        foreach (var batch in items.Chunk(256))
+        {
+            await client.UpsertAsync(Collection, [.. batch.Select(i => ToPoint(i.Document, i.Chunk,
+                new Dictionary<string, Vector> { [SparseVectorName] = (i.Vector.Values, i.Vector.Indices) }))],
+                cancellationToken: cancellationToken);
+        }
+    }
+
+    /// <summary>The <paramref name="limit"/> chunks with the highest BM25 score; none if the query has no terms.</summary>
+    public async Task<IReadOnlyList<RetrievedChunk>> SearchSparseAsync(SparseVector query, int limit,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (query.Count == 0)
+        {
+            return [];
+        }
+
+        var points = await client.QueryAsync(Collection, query: (query.Values, query.Indices), usingVector: SparseVectorName,
+            limit: (ulong)limit, payloadSelector: true, cancellationToken: cancellationToken);
+        return [.. points.Select(p => FromPayload(p.Payload, p.Score))];
     }
 
     /// <summary>Replaces every chunk of a document: stale chunks from an earlier version are removed.</summary>
@@ -136,12 +194,15 @@ public sealed class ChunkStore(QdrantClient client, string collection)
             ? await client.CountAsync(Collection, exact: true, cancellationToken: cancellationToken)
             : 0;
 
-    internal static PointStruct ToPoint(Document document, Chunk chunk, ReadOnlyMemory<float> vector)
+    internal static PointStruct ToPoint(Document document, Chunk chunk, ReadOnlyMemory<float> vector) =>
+        ToPoint(document, chunk, new Dictionary<string, float[]> { [DenseVector] = vector.ToArray() });
+
+    private static PointStruct ToPoint(Document document, Chunk chunk, Vectors vectors)
     {
         var point = new PointStruct
         {
             Id = DeterministicGuid.Create(chunk.Id),
-            Vectors = new Dictionary<string, float[]> { [DenseVector] = vector.ToArray() },
+            Vectors = vectors,
             Payload =
             {
                 ["document_id"] = chunk.DocumentId,
