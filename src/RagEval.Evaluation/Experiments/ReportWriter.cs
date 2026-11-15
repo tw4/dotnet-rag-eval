@@ -66,8 +66,8 @@ public static class ReportWriter
             sb.Append(inv, $"\n## {group.Key} ({runs[0].Queries} queries)\n\n");
             sb.Append("| Run | nDCG@10 | 95% CI | Recall@10 | Recall@100 | MRR@10 |");
             sb.Append(answers ? " Answer hit@5 | Answer hit@10 |" : "");
-            sb.Append(" Chunks | Index (s) | Query embed p50 (ms) | Search p50 (ms) |\n");
-            sb.Append("|---|---:|---|---:|---:|---:|").Append(answers ? "---:|---:|" : "").Append("---:|---:|---:|---:|\n");
+            sb.Append(" Chunks | Text (MB) | Vectors (MB) | Index (s) | Query embed p50 (ms) | Search p50 (ms) |\n");
+            sb.Append("|---|---:|---|---:|---:|---:|").Append(answers ? "---:|---:|" : "").Append("---:|---:|---:|---:|---:|---:|\n");
             foreach (var r in runs)
             {
                 string M(string key) => r.Metrics.TryGetValue(key, out var v) ? v.ToString("F3", inv) : "–";
@@ -77,13 +77,15 @@ public static class ReportWriter
                     sb.Append(inv, $" {M("answer_hit@5")} | {M("answer_hit@10")} |");
                 }
 
-                var indexSeconds = r.Index.Reused ? "reused" : r.Index.Seconds.ToString("F0", inv);
-                sb.Append(inv, $" {r.Index.Chunks:N0} | {indexSeconds} | {r.QueryEmbedding.P50:F0} | {r.Search.P50:F1} |\n");
+                var vectors = r.Index.VectorBytes > 0 ? (r.Index.VectorBytes / 1e6).ToString("F1", inv) : "–";
+                var seconds = r.Index.Seconds > 0 ? r.Index.Seconds.ToString("F0", inv) : "–";
+                sb.Append(inv, $" {r.Index.Chunks:N0} | {r.Index.Characters / 1e6:F2} | {vectors} | {seconds} | {r.QueryEmbedding.P50:F0} | {r.Search.P50:F1} |\n");
             }
         }
 
         sb.Append("\nnDCG@10, recall and MRR are document-level (each document ranked at its best chunk), computed as trec_eval does. ")
           .Append("Answer hit@k: a top-k chunk from a relevant document contains the answer span. ")
+          .Append("Text: characters stored in chunk payloads; Vectors: raw float32 vector size; Index: time to build the index. ")
           .Append("The 95% CI is a bootstrap over queries: runs whose intervals overlap widely are not reliably different.\n");
         return sb.ToString();
     }

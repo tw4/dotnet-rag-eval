@@ -1,0 +1,13 @@
+{
+  // #12: does the way documents are cut change what is retrieved, and at what index size?
+  "name": "chunking",
+  "description": "Chunking strategies with the baseline embedding model (nomic-embed-text) and dense retrieval: fixed windows of three sizes, structural (sections, paragraphs, sentences), and sentence windows (one sentence embedded, two sentences on each side returned).",
+  "datasets": ["scifact", "turkish-rag-eval", "turkish-rag-eval-full"],
+  "runs": [
+    { "name": "fixed-500-100", "chunking": { "strategy": "fixed", "size": 500, "overlap": 100 } },
+    { "name": "fixed-1000-200 (baseline)", "chunking": { "strategy": "fixed", "size": 1000, "overlap": 200 } },
+    { "name": "fixed-2000-400", "chunking": { "strategy": "fixed", "size": 2000, "overlap": 400 } },
+    { "name": "structural-1000", "chunking": { "strategy": "structural", "size": 1000 } },
+    { "name": "sentence-window-2", "chunking": { "strategy": "sentence-window", "window": 2 } }
+  ]
+}

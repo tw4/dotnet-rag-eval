@@ -104,6 +104,18 @@ public sealed class ChunkStore(QdrantClient client, string collection)
         return info.Config.Metadata.ToDictionary(kv => kv.Key, kv => kv.Value.StringValue, StringComparer.Ordinal);
     }
 
+    /// <summary>Size of the dense vectors, or 0 if the collection does not exist.</summary>
+    public async Task<int> GetDimensionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!await client.CollectionExistsAsync(Collection, cancellationToken))
+        {
+            return 0;
+        }
+
+        var info = await client.GetCollectionInfoAsync(Collection, cancellationToken);
+        return info.Config.Params.VectorsConfig.ParamsMap?.Map.TryGetValue(DenseVector, out var p) == true ? (int)p.Size : 0;
+    }
+
     public async Task SetMetadataAsync(IReadOnlyDictionary<string, string> metadata, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(metadata);
@@ -150,6 +162,11 @@ public sealed class ChunkStore(QdrantClient client, string collection)
             point.Payload["page"] = page;
         }
 
+        if (chunk.EmbeddingText is { } embedded)
+        {
+            point.Payload["embedded_text"] = embedded;
+        }
+
         if (chunk.Section is { } section)
         {
             point.Payload["section"] = section;
@@ -171,7 +188,8 @@ public sealed class ChunkStore(QdrantClient client, string collection)
         int? Page = payload.TryGetValue("page", out var pv) ? (int)pv.IntegerValue : null;
 
         var span = new SourceSpan(I("source_start"), I("source_end"), I("start_line"), I("end_line"), Page);
-        var chunk = new Chunk(S("document_id"), I("chunk_index"), S("text"), I("text_start"), I("text_end"), span, Opt("section"));
+        var chunk = new Chunk(S("document_id"), I("chunk_index"), S("text"), I("text_start"), I("text_end"), span, Opt("section"),
+            Opt("embedded_text"));
         return new RetrievedChunk(chunk, score, Opt("title"), Opt("source"));
     }
 }

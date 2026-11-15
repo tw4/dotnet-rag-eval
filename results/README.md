@@ -57,3 +57,53 @@ dotnet run --project src/RagEval.Cli -- eval run experiments/baseline.json --out
 
 Indexing takes about 5 minutes for SciFact and 4 for both Turkish sets on an M4; later runs
 reuse the indexes.
+
+## Chunking (#12)
+
+[`chunking/summary.md`](chunking/summary.md): five chunkers with the baseline model and dense
+retrieval. *Fixed* windows of 500, 1,000 (baseline) and 2,000 characters with 20% overlap,
+snapped to word boundaries; *structural* chunks that follow sections, then paragraphs, then
+sentences, up to 1,000 characters, with the section path prepended to the embedded text; and
+*sentence windows*, where each sentence is embedded alone and returned with two sentences on
+each side.
+
+| Chunker | SciFact nDCG@10 | Turkish nDCG@10 | Turkish answer hit@5 | Turkish full nDCG@10 *(prov.)* | Turkish chunks | SciFact vectors (MB) |
+|---|---:|---:|---:|---:|---:|---:|
+| fixed-500-100 | 0.713 | 0.666 | 0.362 | 0.431 | 2,718 | 63.5 |
+| fixed-1000-200 (baseline) | 0.714 | 0.634 | 0.345 | 0.408 | 1,366 | 34.3 |
+| fixed-2000-400 | 0.698 | 0.647 | 0.414 | 0.378 | 689 | 18.4 |
+| structural-1000 | **0.715** | 0.687 | **0.431** | 0.426 | 1,649 | 33.1 |
+| sentence-window-2 | 0.695 | **0.689** | 0.414 | **0.507** | 9,635 | 153.3 |
+
+### What it says
+
+**On SciFact chunking does not matter**, as expected: abstracts average 1,500 characters, so
+most fit in one or two chunks whatever the strategy. All five runs lie within 0.02 of each
+other and inside each other's intervals. Sentence windows are slightly worse there: a claim
+matched against a single sentence loses the context of the whole abstract.
+
+**On Turkish, structure-aware chunkers lead, but within the noise of 58 queries.** Structural
+chunks and sentence windows gain about 0.05 nDCG@10 and 0.07–0.09 answer hit@5 over the
+baseline, less than the ±0.1 that 58 queries can resolve. The 296-query set is clearer:
+sentence windows reach 0.507 against 0.408 for the baseline, and the intervals (0.464–0.554
+and 0.361–0.453) do not overlap. That set is provisional, but both sets point the same way.
+
+**Sentence windows cost 4–7× the vectors** (153 MB vs 34 MB on SciFact) and about twice the
+indexing time. Structural chunks cost the same as the baseline, store less text (no overlap),
+and are never worse than it on any set beyond noise.
+
+**Answer hit@10 barely moves** (0.43–0.53 on the 58 queries) whichever chunker is used. This
+confirms the baseline finding: the remaining gap is ranking within long articles, not where
+chunks are cut.
+
+**Choice for later experiments: `structural-1000`.** It matches or beats the baseline on every
+set at the same index size. Sentence windows are the better option for long documents and
+paraphrased questions when index size does not matter, and stay available as a configuration.
+
+### Reproduce
+
+```sh
+dotnet run --project src/RagEval.Cli -- eval run experiments/chunking.json --out results/chunking
+```
+
+About 50 minutes on an M4, most of it indexing SciFact four times; the baseline index is reused.

@@ -16,7 +16,7 @@ public sealed class Indexer(IChunker chunker, Embedder embedder, ChunkStore stor
     public async Task<IReadOnlyList<Chunk>> IndexAsync(Document document, CancellationToken cancellationToken = default)
     {
         var chunks = chunker.Split(document);
-        var vectors = await embedder.EmbedDocumentsAsync([.. chunks.Select(c => c.Text)], cancellationToken);
+        var vectors = await embedder.EmbedDocumentsAsync([.. chunks.Select(c => c.TextToEmbed)], cancellationToken);
         if (!_collectionReady)
         {
             var dimensions = vectors.Count > 0

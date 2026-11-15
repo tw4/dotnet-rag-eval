@@ -112,6 +112,7 @@ public sealed class ExperimentTests : IDisposable
             var md = await File.ReadAllTextAsync(markdown, TestContext.Current.CancellationToken);
             Assert.Contains("## tiny (2 queries)", md, StringComparison.Ordinal);
             Assert.Contains("| small chunks | **1.000** |", md, StringComparison.Ordinal);
+            Assert.Contains("Vectors (MB)", md, StringComparison.Ordinal);
             Assert.Contains("Answer hit@5", md, StringComparison.Ordinal);
         }
         finally
