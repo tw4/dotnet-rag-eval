@@ -42,4 +42,36 @@ public class DocumentApiTests
             await qdrant.DeleteCollectionAsync(collection, cancellationToken: CancellationToken.None);
         }
     }
+
+    [Fact]
+    public async Task Ask_answers_with_citations_or_refuses()
+    {
+        using var qdrant = QdrantFixture.ClientOrSkip();
+        var collection = QdrantFixture.NewCollection();
+        try
+        {
+            await using var factory = new ApiFactory(collection);
+            using var client = factory.CreateClient();
+            var ct = TestContext.Current.CancellationToken;
+            using var md = Upload("guide.md", "# Guide\n\nInstall the gateway with docker compose up.\n");
+            (await client.PostAsync(new Uri("/documents", UriKind.Relative), md, ct)).EnsureSuccessStatusCode();
+
+            var answered = await client.PostAsJsonAsync(new Uri("/ask", UriKind.Relative), new { question = "How do I install the gateway?" }, ct);
+            var body = await answered.Content.ReadAsStringAsync(ct);
+            Assert.Equal(HttpStatusCode.OK, answered.StatusCode);
+            Assert.Contains("\"refused\":false", body, StringComparison.Ordinal);
+            Assert.Contains("\"documentId\":\"guide.md\"", body, StringComparison.Ordinal);
+            Assert.Contains("\"startLine\":1,\"endLine\":3", body, StringComparison.Ordinal);
+
+            var refused = await client.PostAsJsonAsync(new Uri("/ask", UriKind.Relative), new { question = "Peru capital city" }, ct);
+            Assert.Contains("\"refused\":true", await refused.Content.ReadAsStringAsync(ct), StringComparison.Ordinal);
+
+            var empty = await client.PostAsJsonAsync(new Uri("/ask", UriKind.Relative), new { question = " " }, ct);
+            Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+        }
+        finally
+        {
+            await qdrant.DeleteCollectionAsync(collection, cancellationToken: CancellationToken.None);
+        }
+    }
 }
