@@ -1,0 +1,60 @@
+{
+  "$comment": "Evaluation datasets: where they come from, pinned by checksum. Downloaded into data/ (never committed). See docs/datasets.md.",
+  "datasets": [
+    {
+      "id": "scifact",
+      "name": "SciFact (BEIR version)",
+      "language": "en",
+      "task": "Retrieve the scientific abstracts that support or refute a claim.",
+      "license": "Claims and relevance labels: CC BY 4.0. Abstracts: ODC-By 1.0 (from S2ORC).",
+      "licenseSource": "https://github.com/allenai/scifact/blob/master/LICENSE.md",
+      "citation": "Wadden et al., Fact or Fiction: Verifying Scientific Claims, EMNLP 2020; Thakur et al., BEIR, NeurIPS 2021.",
+      "format": "beir-zip",
+      "split": "test",
+      "files": [
+        {
+          "url": "https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/scifact.zip",
+          "path": "scifact.zip",
+          "sha256": "536e14446a0ba56ed1398ab1055f39fe852686ecad24a6306c80c490fa8e0165"
+        }
+      ],
+      "size": { "documents": 5183, "queries": 300, "judgements": 339 }
+    },
+    {
+      "id": "turkish-rag-eval",
+      "name": "Turkish RAG Eval (human questions)",
+      "language": "tr",
+      "task": "Retrieve the Turkish Wikipedia health article that answers a question; each question has a verbatim answer span.",
+      "license": "CC BY-SA 4.0",
+      "licenseSource": "https://huggingface.co/datasets/mteb/turkish-rag-eval",
+      "citation": "Rizgar Ozan, turkish-rag-eval, https://github.com/RizgarOzan/turkish-rag-eval",
+      "revision": "1666040a6b9b383e358b0ec34ec40958c619b507",
+      "format": "beir-jsonl",
+      "split": "test",
+      "files": [
+        { "url": "https://huggingface.co/datasets/mteb/turkish-rag-eval/resolve/1666040a6b9b383e358b0ec34ec40958c619b507/corpus.jsonl", "path": "turkish-rag-eval/corpus.jsonl", "sha256": "3df877504a8467033efd75301bd4e16c3c1531e3c39901ecfd7a77557c8f806f" },
+        { "url": "https://huggingface.co/datasets/mteb/turkish-rag-eval/resolve/1666040a6b9b383e358b0ec34ec40958c619b507/queries.jsonl", "path": "turkish-rag-eval/queries.jsonl", "sha256": "a5658c60f9245f706a543025383dc74a30b9e3269387126a245e5d4e16716a06" },
+        { "url": "https://huggingface.co/datasets/mteb/turkish-rag-eval/resolve/1666040a6b9b383e358b0ec34ec40958c619b507/qrels/test.jsonl", "path": "turkish-rag-eval/qrels/test.jsonl", "sha256": "f20549abbfcc155436f5d18c385134de4d9be69e2325773ee7ee04705d5b5688" }
+      ],
+      "size": { "documents": 54, "queries": 58, "judgements": 58 }
+    },
+    {
+      "id": "turkish-rag-eval-full",
+      "name": "Turkish RAG Eval (full: human + LLM-drafted questions)",
+      "language": "tr",
+      "task": "As turkish-rag-eval, over 94 articles in six domains. 238 of the 296 questions are LLM-drafted and double-labelled, not human-verified: results are provisional.",
+      "license": "CC BY-SA 4.0",
+      "licenseSource": "https://huggingface.co/datasets/mteb/turkish-rag-eval",
+      "citation": "Rizgar Ozan, turkish-rag-eval, https://github.com/RizgarOzan/turkish-rag-eval",
+      "revision": "1666040a6b9b383e358b0ec34ec40958c619b507",
+      "format": "beir-jsonl",
+      "split": "test",
+      "files": [
+        { "url": "https://huggingface.co/datasets/mteb/turkish-rag-eval/resolve/1666040a6b9b383e358b0ec34ec40958c619b507/full/corpus.jsonl", "path": "turkish-rag-eval-full/corpus.jsonl", "sha256": "8d497a8e352bab9800cdad0046ca170395d9f707cd94b57345e6be6647a71a3c" },
+        { "url": "https://huggingface.co/datasets/mteb/turkish-rag-eval/resolve/1666040a6b9b383e358b0ec34ec40958c619b507/full/queries.jsonl", "path": "turkish-rag-eval-full/queries.jsonl", "sha256": "3e8f4bde2391e4c776babe4763771bd42f93f0e0989bef0d9f40923e72d5a0ec" },
+        { "url": "https://huggingface.co/datasets/mteb/turkish-rag-eval/resolve/1666040a6b9b383e358b0ec34ec40958c619b507/full/qrels/test.jsonl", "path": "turkish-rag-eval-full/qrels/test.jsonl", "sha256": "67f7a106b3218dd52715efcbec80310aedb368e5c4a1ee5c819637669e32888c" }
+      ],
+      "size": { "documents": 94, "queries": 296, "judgements": 296 }
+    }
+  ]
+}
