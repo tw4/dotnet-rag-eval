@@ -63,11 +63,14 @@ public static class ReportWriter
         {
             var runs = group.ToList();
             var answers = runs.Any(r => r.Metrics.ContainsKey("answer_hit@5"));
+            var reranks = runs.Any(r => r.Rerank is not null);
             sb.Append(inv, $"\n## {group.Key} ({runs[0].Queries} queries)\n\n");
             sb.Append("| Run | nDCG@10 | 95% CI | Recall@10 | Recall@100 | MRR@10 |");
             sb.Append(answers ? " Answer hit@5 | Answer hit@10 |" : "");
-            sb.Append(" Chunks | Text (MB) | Vectors (MB) | Index (s) | Query embed p50 (ms) | Search p50 (ms) |\n");
-            sb.Append("|---|---:|---|---:|---:|---:|").Append(answers ? "---:|---:|" : "").Append("---:|---:|---:|---:|---:|---:|\n");
+            sb.Append(" Chunks | Text (MB) | Vectors (MB) | Index (s) | Query embed p50 (ms) | Search p50 (ms) |");
+            sb.Append(reranks ? " Rerank p50 / p95 (ms) |\n" : "\n");
+            sb.Append("|---|---:|---|---:|---:|---:|").Append(answers ? "---:|---:|" : "").Append("---:|---:|---:|---:|---:|---:|")
+              .Append(reranks ? "---:|\n" : "\n");
             foreach (var r in runs)
             {
                 string M(string key) => r.Metrics.TryGetValue(key, out var v) ? v.ToString("F3", inv) : "–";
@@ -80,7 +83,13 @@ public static class ReportWriter
                 var vectors = r.Index.VectorBytes > 0 ? (r.Index.VectorBytes / 1e6).ToString("F1", inv) : "–";
                 var seconds = r.Index.Seconds > 0 ? r.Index.Seconds.ToString("F0", inv) : "–";
                 var embed = r.Run.Retrieval.Strategy == "sparse" ? "–" : r.QueryEmbedding.P50.ToString("F0", inv);
-                sb.Append(inv, $" {r.Index.Chunks:N0} | {r.Index.Characters / 1e6:F2} | {vectors} | {seconds} | {embed} | {r.Search.P50:F1} |\n");
+                sb.Append(inv, $" {r.Index.Chunks:N0} | {r.Index.Characters / 1e6:F2} | {vectors} | {seconds} | {embed} | {r.Search.P50:F1} |");
+                if (reranks)
+                {
+                    sb.Append(r.Rerank is { } rr ? string.Create(inv, $" {rr.P50:F0} / {rr.P95:F0} |") : " – |");
+                }
+
+                sb.Append('\n');
             }
         }
 

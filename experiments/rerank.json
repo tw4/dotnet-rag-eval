@@ -1,0 +1,11 @@
+{
+  // #15: does a local cross-encoder reranker improve the top of the list, and at what latency?
+  "name": "rerank",
+  "description": "Qwen3-Reranker-0.6B (served by Ollama, scored as P(yes) of its yes/no judgement) reranking the first 20 chunks of two retrievers on structural chunks of 1,000 characters: dense embeddinggemma (the choice from #13) and its hybrid with BM25 (the highest recall@100 in #14).",
+  "datasets": ["scifact", "turkish-rag-eval", "turkish-rag-eval-full"],
+  "runs": [
+    { "name": "dense embeddinggemma", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "embeddinggemma" } },
+    { "name": "dense embeddinggemma + rerank-20", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "embeddinggemma" }, "rerank": { "model": "qwen3-reranker:0.6b", "candidates": 20 } },
+    { "name": "hybrid embeddinggemma + bm25 + rerank-20", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "embeddinggemma" }, "retrieval": { "strategy": "hybrid", "analyzer": "prefix-5" }, "rerank": { "model": "qwen3-reranker:0.6b", "candidates": 20 } }
+  ]
+}

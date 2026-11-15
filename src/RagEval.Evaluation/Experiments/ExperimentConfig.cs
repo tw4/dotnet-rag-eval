@@ -50,6 +50,19 @@ public sealed record RetrievalConfig
     public int Candidates { get; init; } = 100;
 }
 
+/// <summary>Reranking of the first retrieved chunks by a local model (none by default).</summary>
+public sealed record RerankConfig
+{
+    /// <summary>Ollama model used as a yes/no reranker, e.g. <c>qwen3-reranker:0.6b</c>.</summary>
+    public required string Model { get; init; }
+
+    /// <summary>How many of the first retrieved chunks are reranked.</summary>
+    public int Candidates { get; init; } = 20;
+
+    /// <summary>Passages scored concurrently.</summary>
+    public int Parallelism { get; init; } = 4;
+}
+
 /// <summary>One configuration of the pipeline to evaluate.</summary>
 public sealed record RunConfig
 {
@@ -60,6 +73,8 @@ public sealed record RunConfig
     public EmbeddingConfig Embedding { get; init; } = new();
 
     public RetrievalConfig Retrieval { get; init; } = new();
+
+    public RerankConfig? Rerank { get; init; }
 }
 
 /// <summary>An experiment: every run on every dataset. Read from <c>experiments/*.json</c>.</summary>

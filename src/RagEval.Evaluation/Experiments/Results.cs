@@ -2,7 +2,7 @@ namespace RagEval.Evaluation.Experiments;
 
 /// <summary>Metrics of one query.</summary>
 public sealed record QueryResult(string QueryId, double Ndcg10, double Recall10, double Recall100, double Mrr10,
-    bool? AnswerHit5, bool? AnswerHit10, IReadOnlyList<string> Top10Documents, double EmbedMs, double SearchMs);
+    bool? AnswerHit5, bool? AnswerHit10, IReadOnlyList<string> Top10Documents, double EmbedMs, double SearchMs, double RerankMs = 0);
 
 /// <summary>How the corpus was indexed for a run.</summary>
 /// <param name="Collection">Qdrant collection.</param>
@@ -35,6 +35,9 @@ public sealed record RunResult
 
     public required Latency QueryEmbedding { get; init; }
     public required Latency Search { get; init; }
+
+    /// <summary>Reranking latency, for runs that rerank.</summary>
+    public Latency? Rerank { get; init; }
     public required IReadOnlyList<QueryResult> PerQuery { get; init; }
 }
 

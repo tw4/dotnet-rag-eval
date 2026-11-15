@@ -4,6 +4,7 @@ using RagEval.Core.Chunking;
 using RagEval.Core.Configuration;
 using RagEval.Core.Embeddings;
 using RagEval.Core.Indexing;
+using RagEval.Core.Reranking;
 using RagEval.Evaluation.Datasets;
 using RagEval.Evaluation.Metrics;
 
@@ -22,6 +23,10 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
     public Func<string, Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>> EmbeddingsFor { get; init; } =
         model => Clients.Embeddings(ollama, model);
 
+    /// <summary>Creates the reranker of a run (tests substitute a fake).</summary>
+    public Func<RerankConfig, IReranker> RerankerFor { get; init; } =
+        config => new YesNoReranker(new OllamaSharp.OllamaApiClient(ollama.Url), config.Model, config.Parallelism);
+
     public async Task<ExperimentResult> RunAsync(ExperimentConfig experiment, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(experiment);
@@ -29,7 +34,8 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
 
         // Collected first, so the commit and model digests are those of the code and models that ran.
         var environment = await RunEnvironmentProbe.CollectAsync(qdrant, ollama,
-            experiment.Runs.Where(r => UsesDense(r.Retrieval)).Select(r => r.Embedding.Model).Distinct(), cancellationToken);
+            experiment.Runs.Where(r => UsesDense(r.Retrieval)).Select(r => r.Embedding.Model)
+                .Concat(experiment.Runs.Where(r => r.Rerank is not null).Select(r => r.Rerank!.Model)).Distinct(), cancellationToken);
         var results = new List<RunResult>();
         foreach (var datasetId in experiment.Datasets)
         {
@@ -106,6 +112,8 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
 
         var retriever = CreateRetriever(retrieval, denseIndex is null ? null : new ChunkStore(qdrant, denseIndex.Collection), sparse);
         var index = Combine(denseIndex, sparseIndex);
+        var reranker = run.Rerank is null ? null : RerankerFor(run.Rerank);
+        var depth = Math.Max(retrieval.Depth, run.Rerank?.Candidates ?? 0);
 
         var queries = QueryLimit is { } limit ? dataset.Queries.Take(limit).ToList() : dataset.Queries;
         var perQuery = new List<QueryResult>(queries.Count);
@@ -116,8 +124,17 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
             var vector = embedder is null ? ReadOnlyMemory<float>.Empty : await embedder.EmbedQueryAsync(query.Text, cancellationToken);
             var embedMs = watch.Elapsed.TotalMilliseconds;
             watch.Restart();
-            var chunks = await retriever.RetrieveAsync(query.Text, vector, retrieval.Depth, cancellationToken);
+            var chunks = await retriever.RetrieveAsync(query.Text, vector, depth, cancellationToken);
             var searchMs = watch.Elapsed.TotalMilliseconds;
+            var rerankMs = 0.0;
+            if (reranker is not null)
+            {
+                watch.Restart();
+                var candidates = run.Rerank!.Candidates;
+                var scores = await reranker.ScoreAsync(query.Text, [.. chunks.Take(candidates).Select(Rerank.Passage)], cancellationToken);
+                chunks = [.. Rerank.Apply(chunks, scores, candidates).Take(retrieval.Depth)];
+                rerankMs = watch.Elapsed.TotalMilliseconds;
+            }
 
             var judgements = dataset.Qrels[query.Id];
             var ranking = RetrievalMetrics.DocumentRanking(chunks);
@@ -131,7 +148,8 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
                 query.AnswerSpan is null ? null : RetrievalMetrics.AnswerHitAt(chunks, judgements, query.AnswerSpan, 10),
                 [.. ranking.Take(10)],
                 embedMs,
-                searchMs));
+                searchMs,
+                rerankMs));
         }
 
         return Summarize(dataset.Info.Id, run, index, perQuery);
@@ -190,6 +208,7 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
             Ndcg10Ci95 = [ci.Low, ci.High],
             QueryEmbedding = Lat(q => q.EmbedMs),
             Search = Lat(q => q.SearchMs),
+            Rerank = run.Rerank is null ? null : Lat(q => q.RerankMs),
             PerQuery = perQuery,
         };
     }
