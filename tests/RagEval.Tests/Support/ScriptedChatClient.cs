@@ -11,11 +11,14 @@ internal sealed class ScriptedChatClient(Func<IReadOnlyList<ChatMessage>, string
 
     public List<IReadOnlyList<ChatMessage>> Calls { get; } = [];
 
+    public List<ChatOptions?> Options { get; } = [];
+
     public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         var list = messages.ToList();
         Calls.Add(list);
+        Options.Add(options);
         var text = reply(list);
         return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, text))
         {

@@ -1,6 +1,7 @@
 using System.CommandLine;
 using RagEval.Core.Configuration;
 using RagEval.Evaluation.Experiments;
+using RagEval.Evaluation.Judging;
 
 namespace RagEval.Cli;
 
@@ -12,6 +13,37 @@ internal static class EvalCommand
         var command = new Command("eval", "Run evaluation experiments.");
         command.Subcommands.Add(Run());
         command.Subcommands.Add(Latency());
+        command.Subcommands.Add(Answers());
+        return command;
+    }
+
+    private static Command Answers()
+    {
+        var config = new Argument<FileInfo>("experiment") { Description = "Answer experiment file with a judge, e.g. experiments/answers.json" };
+        var output = new Option<DirectoryInfo?>("--out") { Description = "Results folder (default: runs/<experiment>/<timestamp>)" };
+        var limit = new Option<int?>("--limit") { Description = "Only the first N questions per dataset (quick check)" };
+
+        var command = new Command("answers", "Generate answers and judge their faithfulness and correctness.") { config, output, limit };
+        command.Options.Add(DatasetsCommand.ManifestOption);
+        command.Options.Add(DatasetsCommand.DataOption);
+        command.SetAction(async (result, cancellationToken) =>
+        {
+            var writer = result.InvocationConfiguration.Output;
+            var settings = Settings.From(result);
+            var experiment = ExperimentConfig.Load(result.GetValue(config)!.FullName);
+            using var qdrant = Clients.Qdrant(settings.Qdrant);
+            Task<RagEval.Evaluation.Datasets.EvalDataset> Load(string id, CancellationToken ct) => DatasetsCommand.LoadAsync(result, id, ct);
+            var runner = new ExperimentRunner(qdrant, settings.Ollama, Load) { Log = writer.WriteLine };
+            var evaluator = new AnswerEvaluator(qdrant, settings.Ollama, runner, Load) { Log = writer.WriteLine, QueryLimit = result.GetValue(limit) };
+            var outcome = await evaluator.RunAsync(experiment, cancellationToken);
+            var folder = result.GetValue(output)?.FullName
+                ?? Path.Combine("runs", experiment.Name, outcome.StartedAt.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture));
+            var (json, markdown) = AnswerEvaluator.Write(outcome, folder);
+            await writer.WriteLineAsync();
+            await writer.WriteLineAsync(await File.ReadAllTextAsync(markdown, cancellationToken));
+            await writer.WriteLineAsync($"Wrote {json} and {markdown}.");
+            return 0;
+        });
         return command;
     }
 
