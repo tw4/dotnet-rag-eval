@@ -16,6 +16,32 @@ internal static class EvalCommand
         command.Subcommands.Add(Answers());
         command.Subcommands.Add(LabelSample());
         command.Subcommands.Add(AgreementCommand());
+        command.Subcommands.Add(CompareCommand());
+        return command;
+    }
+
+    private static Command CompareCommand()
+    {
+        var current = new Argument<FileInfo>("results") { Description = "New results.json" };
+        var reference = new Argument<FileInfo>("reference") { Description = "Reference results.json of the same experiment" };
+        var tolerance = new Option<double>("--tolerance") { Description = "Largest drop allowed per metric", DefaultValueFactory = _ => 0.01 };
+
+        var command = new Command("compare", "Compare results with reference results; exit code 1 when a metric dropped by more than the tolerance.")
+        {
+            current, reference, tolerance,
+        };
+        command.SetAction(async (result, cancellationToken) =>
+        {
+            var writer = result.InvocationConfiguration.Output;
+            var changes = Comparison.Compare(ReportWriter.Read(result.GetValue(reference)!.FullName), ReportWriter.Read(result.GetValue(current)!.FullName));
+            var limit = result.GetValue(tolerance);
+            await writer.WriteLineAsync(Comparison.Markdown(changes, limit));
+            var regressions = Comparison.Regressions(changes, limit);
+            await writer.WriteLineAsync(regressions.Count == 0
+                ? $"No regressions ({changes.Count} metrics within {limit:0.###})."
+                : $"{regressions.Count} metric(s) dropped by more than {limit:0.###}.");
+            return regressions.Count == 0 ? 0 : 1;
+        });
         return command;
     }
 
