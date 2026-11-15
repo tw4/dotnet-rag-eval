@@ -80,6 +80,37 @@ public sealed class ChunkStore(QdrantClient client, string collection)
         }
     }
 
+    /// <summary>Adds chunks of many documents in bulk (no deletes: for freshly created collections).</summary>
+    public async Task UpsertAsync(IReadOnlyList<(Document Document, Chunk Chunk, ReadOnlyMemory<float> Vector)> items,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        foreach (var batch in items.Chunk(256))
+        {
+            await client.UpsertAsync(Collection, [.. batch.Select(i => ToPoint(i.Document, i.Chunk, i.Vector))],
+                cancellationToken: cancellationToken);
+        }
+    }
+
+    /// <summary>The collection's metadata, or null if the collection does not exist.</summary>
+    public async Task<IReadOnlyDictionary<string, string>?> GetMetadataAsync(CancellationToken cancellationToken = default)
+    {
+        if (!await client.CollectionExistsAsync(Collection, cancellationToken))
+        {
+            return null;
+        }
+
+        var info = await client.GetCollectionInfoAsync(Collection, cancellationToken);
+        return info.Config.Metadata.ToDictionary(kv => kv.Key, kv => kv.Value.StringValue, StringComparer.Ordinal);
+    }
+
+    public async Task SetMetadataAsync(IReadOnlyDictionary<string, string> metadata, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        await client.UpdateCollectionAsync(Collection, metadata.ToDictionary(kv => kv.Key, kv => (Value)kv.Value),
+            cancellationToken: cancellationToken);
+    }
+
     /// <summary>The <paramref name="limit"/> chunks closest to a query vector.</summary>
     public async Task<IReadOnlyList<RetrievedChunk>> SearchAsync(ReadOnlyMemory<float> vector, int limit, CancellationToken cancellationToken = default)
     {
