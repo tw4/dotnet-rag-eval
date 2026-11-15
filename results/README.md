@@ -107,3 +107,56 @@ dotnet run --project src/RagEval.Cli -- eval run experiments/chunking.json --out
 ```
 
 About 50 minutes on an M4, most of it indexing SciFact four times; the baseline index is reused.
+
+## Embedding models (#13)
+
+[`embeddings/summary.md`](embeddings/summary.md): five embedding models served by Ollama, each
+with the query and document prompts its model card prescribes, on `structural-1000` chunks
+(the choice from #12) with dense retrieval. nomic-embed-text (the baseline) and
+mxbai-embed-large are English models; bge-m3, qwen3-embedding:0.6b and embeddinggemma are
+multilingual.
+
+| Model | Dim | SciFact nDCG@10 | Turkish nDCG@10 | Turkish answer hit@5 | Turkish full nDCG@10 *(prov.)* | Turkish full answer hit@5 | SciFact index (s) | Query embed p50 (ms) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| nomic-embed-text (137M) | 768 | 0.715 | 0.687 | 0.431 | 0.426 | 0.247 | 373 | 22 |
+| mxbai-embed-large (335M) | 1024 | 0.742 | 0.523 | 0.224 | 0.364 | 0.159 | 787 | 24 |
+| bge-m3 (568M) | 1024 | 0.658 | 0.932 | 0.845 | 0.874 | 0.804 | 1,073 | 28 |
+| qwen3-embedding:0.6b (596M) | 1024 | 0.695 | 0.815 | 0.638 | 0.749 | 0.564 | 1,166 | 39 |
+| embeddinggemma (308M) | 768 | **0.768** | **0.988** | **0.966** | **0.899** | **0.838** | **318** | **20** |
+
+### What it says
+
+**The embedding model is the largest lever measured so far.** On the 296 Turkish queries the
+multilingual models double nDCG@10 (0.87–0.90 against 0.43 for the baseline) and more than
+triple answer hit@5, where chunking moved nDCG@10 by at most 0.1. The question in the baseline
+write-up, whether the Turkish gap is the model or the ranking within long articles, is answered:
+it was mostly the model. An English model sees Turkish suffixes as noise.
+
+**English models are not just weaker on Turkish, they get worse with size.** mxbai-embed-large
+beats nomic on SciFact (0.742 vs 0.715) but loses to it on both Turkish sets.
+
+**embeddinggemma is best on every set, and also the cheapest.** It indexes SciFact in 318 s,
+the fastest of the five (the 1024-dimensional models take 2.5–3.5× longer), stores 768-d vectors
+like nomic, and embeds a query in about 20 ms. Its lead over bge-m3 on Turkish is inside the
+intervals (0.874–0.924 vs 0.847–0.900 on the full set); its lead on SciFact over nomic and
+bge-m3 is not.
+
+**qwen3-embedding:0.6b underperforms** the other multilingual models on every set despite being
+the largest. Ollama serves it as a GGUF conversion with its instruction prompt applied by this
+project; the official evaluation uses its own pooling code, so a gap to the published numbers
+is possible, but a configuration error cannot be ruled out either.
+
+**The 58-query Turkish set is now saturated.** embeddinggemma reaches 0.988 nDCG@10 and recall@10
+of 1.0, so the set can no longer separate strong pipelines. The 296-query set, still at
+0.84 answer hit@5, carries the Turkish comparisons from here on.
+
+**Choice for later experiments: `embeddinggemma` on `structural-1000`.** The hybrid (#14) and
+reranking (#15) experiments use it as the dense side, and keep nomic as the baseline.
+
+### Reproduce
+
+```sh
+dotnet run --project src/RagEval.Cli -- eval run experiments/embeddings.json --out results/embeddings
+```
+
+About 90 minutes on an M4; the nomic indexes from #12 are reused.

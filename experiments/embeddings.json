@@ -1,0 +1,13 @@
+{
+  // #13: which local embedding model, on English and on Turkish?
+  "name": "embeddings",
+  "description": "Embedding models served by Ollama, each with the prompts its model card prescribes, on structural chunks of 1,000 characters (the choice from #12) and dense retrieval. nomic-embed-text and mxbai-embed-large are English models; bge-m3, qwen3-embedding and embeddinggemma are multilingual.",
+  "datasets": ["scifact", "turkish-rag-eval", "turkish-rag-eval-full"],
+  "runs": [
+    { "name": "nomic-embed-text (137M, 768d)", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "nomic-embed-text" } },
+    { "name": "mxbai-embed-large (335M, 1024d)", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "mxbai-embed-large" } },
+    { "name": "bge-m3 (568M, 1024d, multilingual)", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "bge-m3" } },
+    { "name": "qwen3-embedding:0.6b (596M, 1024d, multilingual)", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "qwen3-embedding:0.6b" } },
+    { "name": "embeddinggemma (308M, 768d, multilingual)", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "embeddinggemma" } }
+  ]
+}

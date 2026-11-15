@@ -17,6 +17,8 @@ public class IndexingTests
     [InlineData("mxbai-embed-large:latest", "", "Represent this sentence for searching relevant passages: ")]
     [InlineData("jeffh/intfloat-multilingual-e5-large:f16", "passage: ", "query: ")]
     [InlineData("bge-m3", "", "")]
+    [InlineData("qwen3-embedding:0.6b", "", "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:")]
+    [InlineData("embeddinggemma:latest", "title: none | text: ", "task: search result | query: ")]
     [InlineData("all-minilm", "", "")]
     public void Embedding_profiles_add_the_prefixes_a_model_expects(string model, string document, string query)
     {
