@@ -160,3 +160,55 @@ dotnet run --project src/RagEval.Cli -- eval run experiments/embeddings.json --o
 ```
 
 About 90 minutes on an M4; the nomic indexes from #12 are reused.
+
+## Hybrid retrieval (#14)
+
+[`hybrid/summary.md`](hybrid/summary.md): BM25 over the same `structural-1000` chunks, stored as
+sparse vectors in Qdrant with its IDF modifier (k1 = 1.2, b = 0.75), alone and fused with dense
+retrieval by reciprocal rank fusion (k = 60, the top 100 of each side). BM25 runs with a plain
+analyzer (lowercase, Turkish dotted/dotless i folded) and with every term cut to its first five
+characters, a crude stemmer for Turkish suffixes.
+
+| Run | SciFact nDCG@10 | SciFact recall@100 | Turkish nDCG@10 | Turkish full nDCG@10 *(prov.)* | Turkish full answer hit@5 | Search p50 (ms) |
+|---|---:|---:|---:|---:|---:|---:|
+| dense nomic-embed-text | 0.715 | 0.942 | 0.687 | 0.426 | 0.247 | 9.5 |
+| dense embeddinggemma | **0.768** | 0.962 | **0.988** | **0.899** | **0.838** | 10.4 |
+| bm25 plain | 0.638 | 0.870 | 0.764 | 0.675 | 0.534 | 4.1 |
+| bm25 prefix-5 | 0.675 | 0.899 | 0.884 | 0.809 | 0.666 | 4.1 |
+| hybrid nomic + bm25 prefix-5 | 0.724 | 0.955 | 0.839 | 0.645 | 0.416 | 8.4 |
+| hybrid embeddinggemma + bm25 prefix-5 | 0.743 | **0.978** | 0.943 | 0.890 | 0.807 | 9.0 |
+
+### What it says
+
+**BM25 is a strong baseline that our numbers reproduce.** Plain BM25 scores 0.638 on SciFact
+and the prefix analyzer 0.675, against 0.665 published for BM25 in BEIR. On Turkish, cutting
+terms to five characters is worth 0.12–0.13 nDCG@10 over the plain analyzer: suffixes split
+one word into many terms, and a prefix merges most of them back. BM25 with that analyzer beats
+the English dense baseline by a wide margin on Turkish (0.809 vs 0.426 on the full set), costs
+a sixth of the index, and searches in half the time.
+
+**Fusion does not beat the best single retriever.** With the English dense model, hybrid lands
+between its two sides on Turkish (0.645 on the full set, below BM25 alone at 0.809) and barely
+above dense on SciFact (0.724 vs 0.715, inside the noise). With embeddinggemma it is slightly
+*worse* than dense alone on every set (0.743 vs 0.768 on SciFact). Rank fusion with equal
+weights pulls the result toward the weaker list; it pays when the two retrievers are comparably
+good and fail on different queries, which is not the case here once the dense model is
+multilingual. This is a negative result for the hybrid default that many RAG guides recommend.
+
+**Where hybrid helps is recall deep in the list.** embeddinggemma + BM25 has the highest
+recall@100 on SciFact (0.978 vs 0.962) and reaches 1.0 on both Turkish sets: the union finds
+relevant documents that either side alone ranks below 100. That is the property a reranker
+needs, so #15 reranks both dense and hybrid candidates.
+
+**Choice:** dense `embeddinggemma` stays the default retriever. BM25 with `prefix-5` is the
+choice when no multilingual embedding model is available (it needs no model at all), and
+hybrid is kept as the candidate generator for reranking.
+
+### Reproduce
+
+```sh
+dotnet run --project src/RagEval.Cli -- eval run experiments/hybrid.json --out results/hybrid
+```
+
+The dense indexes from #12 and #13 are reused; the BM25 indexes build in a few seconds, so the
+run takes about two minutes when they exist and a few minutes more on a fresh Qdrant.

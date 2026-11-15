@@ -26,6 +26,10 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
     {
         ArgumentNullException.ThrowIfNull(experiment);
         var started = DateTimeOffset.UtcNow;
+
+        // Collected first, so the commit and model digests are those of the code and models that ran.
+        var environment = await RunEnvironmentProbe.CollectAsync(qdrant, ollama,
+            experiment.Runs.Where(r => UsesDense(r.Retrieval)).Select(r => r.Embedding.Model).Distinct(), cancellationToken);
         var results = new List<RunResult>();
         foreach (var datasetId in experiment.Datasets)
         {
@@ -37,8 +41,6 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
             }
         }
 
-        var environment = await RunEnvironmentProbe.CollectAsync(qdrant, ollama,
-            experiment.Runs.Select(r => r.Embedding.Model).Distinct(), cancellationToken);
         return new ExperimentResult(experiment, started, DateTimeOffset.UtcNow, environment, results, QueryLimit);
     }
 
@@ -54,25 +56,56 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
         };
     }
 
-    public static IRetriever CreateRetriever(RetrievalConfig config, ChunkStore store)
+    private static bool UsesDense(RetrievalConfig config) => config.Strategy is "dense" or "hybrid";
+
+    private static bool UsesSparse(RetrievalConfig config) => config.Strategy is "sparse" or "hybrid";
+
+    /// <summary>The retriever for a configuration, over a dense and/or a sparse (BM25) index of the same chunks.</summary>
+    public static IRetriever CreateRetriever(RetrievalConfig config, ChunkStore? dense, (ChunkStore Store, Bm25Encoder Encoder)? sparse)
     {
         ArgumentNullException.ThrowIfNull(config);
+        IRetriever Dense() => new DenseRetriever(dense ?? throw new ArgumentNullException(nameof(dense)));
+        IRetriever Sparse() => sparse is { } s ? new SparseRetriever(s.Store, s.Encoder) : throw new ArgumentNullException(nameof(sparse));
         return config.Strategy switch
         {
-            "dense" => new DenseRetriever(store),
+            "dense" => Dense(),
+            "sparse" => Sparse(),
+            "hybrid" => new HybridRetriever(Dense(), Sparse(), config.RrfK, config.Candidates),
             _ => throw new NotSupportedException($"Unknown retrieval strategy '{config.Strategy}'."),
         };
     }
 
     private async Task<RunResult> RunOneAsync(EvalDataset dataset, RunConfig run, CancellationToken cancellationToken)
     {
-        using var generator = EmbeddingsFor(run.Embedding.Model);
-        var embedder = new Embedder(generator, EmbeddingProfile.For(run.Embedding.Model));
-        var chunker = CreateChunker(run.Chunking);
-        var index = await new CorpusIndex(qdrant, chunker, embedder).EnsureAsync(dataset, log: Log, cancellationToken: cancellationToken);
-        Log?.Invoke(index.Reused ? $"  index reused: {index.Collection}" : $"  indexed {index.Chunks} chunks in {index.Elapsed.TotalSeconds:F0} s");
+        var retrieval = run.Retrieval;
+        if (!UsesDense(retrieval) && !UsesSparse(retrieval))
+        {
+            throw new NotSupportedException($"Unknown retrieval strategy '{retrieval.Strategy}'.");
+        }
 
-        var retriever = CreateRetriever(run.Retrieval, new ChunkStore(qdrant, index.Collection));
+        var chunker = CreateChunker(run.Chunking);
+        using var generator = UsesDense(retrieval) ? EmbeddingsFor(run.Embedding.Model) : null;
+        var embedder = generator is null ? null : new Embedder(generator, EmbeddingProfile.For(run.Embedding.Model));
+
+        IndexResult? denseIndex = null, sparseIndex = null;
+        (ChunkStore, Bm25Encoder)? sparse = null;
+        if (embedder is not null)
+        {
+            denseIndex = await new CorpusIndex(qdrant, chunker, embedder).EnsureAsync(dataset, log: Log, cancellationToken: cancellationToken);
+            LogIndex(denseIndex);
+        }
+
+        if (UsesSparse(retrieval))
+        {
+            var (built, encoder) = await new SparseCorpusIndex(qdrant, chunker, TextAnalyzer.Parse(retrieval.Analyzer), retrieval.K1, retrieval.B)
+                .EnsureAsync(dataset, cancellationToken: cancellationToken);
+            LogIndex(built);
+            sparseIndex = built;
+            sparse = (new ChunkStore(qdrant, built.Collection), encoder);
+        }
+
+        var retriever = CreateRetriever(retrieval, denseIndex is null ? null : new ChunkStore(qdrant, denseIndex.Collection), sparse);
+        var index = Combine(denseIndex, sparseIndex);
 
         var queries = QueryLimit is { } limit ? dataset.Queries.Take(limit).ToList() : dataset.Queries;
         var perQuery = new List<QueryResult>(queries.Count);
@@ -80,10 +113,10 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
         foreach (var query in queries)
         {
             watch.Restart();
-            var vector = await embedder.EmbedQueryAsync(query.Text, cancellationToken);
+            var vector = embedder is null ? ReadOnlyMemory<float>.Empty : await embedder.EmbedQueryAsync(query.Text, cancellationToken);
             var embedMs = watch.Elapsed.TotalMilliseconds;
             watch.Restart();
-            var chunks = await retriever.RetrieveAsync(query.Text, vector, run.Retrieval.Depth, cancellationToken);
+            var chunks = await retriever.RetrieveAsync(query.Text, vector, retrieval.Depth, cancellationToken);
             var searchMs = watch.Elapsed.TotalMilliseconds;
 
             var judgements = dataset.Qrels[query.Id];
@@ -103,6 +136,24 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
 
         return Summarize(dataset.Info.Id, run, index, perQuery);
     }
+
+    private void LogIndex(IndexResult index) =>
+        Log?.Invoke(index.Reused ? $"  index reused: {index.Collection}" : $"  indexed {index.Chunks} chunks in {index.Elapsed.TotalSeconds:F0} s");
+
+    /// <summary>One index, or both indexes of a hybrid run (same chunks): times and vector sizes add up.</summary>
+    internal static IndexResult Combine(IndexResult? dense, IndexResult? sparse) => (dense, sparse) switch
+    {
+        ({ } d, null) => d,
+        (null, { } s) => s,
+        ({ } d, { } s) => d with
+        {
+            Collection = $"{d.Collection} + {s.Collection}",
+            Elapsed = d.Elapsed + s.Elapsed,
+            Reused = d.Reused && s.Reused,
+            SparseBytes = d.VectorBytes + s.VectorBytes,
+        },
+        _ => throw new ArgumentException("A run needs at least one index."),
+    };
 
     internal static RunResult Summarize(string dataset, RunConfig run, IndexResult index, IReadOnlyList<QueryResult> perQuery)
     {

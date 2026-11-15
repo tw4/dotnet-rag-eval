@@ -28,11 +28,26 @@ public sealed record EmbeddingConfig
 /// <summary>How a run retrieves.</summary>
 public sealed record RetrievalConfig
 {
-    /// <summary><c>dense</c> (sparse and hybrid arrive with their experiment).</summary>
+    /// <summary><c>dense</c>, <c>sparse</c> (BM25) or <c>hybrid</c> (both, fused by reciprocal rank).</summary>
     public string Strategy { get; init; } = "dense";
 
     /// <summary>Chunks retrieved per query; documents are ranked from these.</summary>
     public int Depth { get; init; } = 100;
+
+    /// <summary>How BM25 cuts text into terms: <c>plain</c> or <c>prefix-N</c> (first N letters of each word).</summary>
+    public string Analyzer { get; init; } = "plain";
+
+    /// <summary>BM25 term-frequency saturation.</summary>
+    public double K1 { get; init; } = 1.2;
+
+    /// <summary>BM25 length normalisation.</summary>
+    public double B { get; init; } = 0.75;
+
+    /// <summary>Reciprocal rank fusion constant (hybrid): larger values flatten the weight of top ranks.</summary>
+    public int RrfK { get; init; } = 60;
+
+    /// <summary>Chunks taken from each retriever before fusion (hybrid); at least <see cref="Depth"/>.</summary>
+    public int Candidates { get; init; } = 100;
 }
 
 /// <summary>One configuration of the pipeline to evaluate.</summary>
