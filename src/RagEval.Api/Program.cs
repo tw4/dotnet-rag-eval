@@ -1,11 +1,11 @@
+using RagEval.Api;
+using RagEval.Api.Endpoints;
 using RagEval.Api.Health;
 using RagEval.Core;
-using RagEval.Core.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.Configure<QdrantOptions>(builder.Configuration.GetSection(QdrantOptions.Section));
-builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection(OllamaOptions.Section));
+builder.Services.AddRagPipeline(builder.Configuration);
 builder.Services.AddHttpClient<DependencyCheck>(c => c.Timeout = TimeSpan.FromSeconds(3));
 
 var app = builder.Build();
@@ -21,6 +21,8 @@ app.MapGet("/health/ready", async (DependencyCheck check, CancellationToken ct) 
     return Results.Json(new { status = ready ? "ok" : "unavailable", dependencies },
         statusCode: ready ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable);
 });
+
+app.MapDocumentEndpoints();
 
 app.Run();
 
