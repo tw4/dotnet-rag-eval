@@ -1,0 +1,6 @@
+# Qwen3-Reranker-0.6B as a generative model, so Ollama returns the log-probabilities of its
+# "yes" / "no" answer (see src/RagEval.Core/Reranking). Built by scripts/pull-models.sh from the
+# official weights; the GGUF conversions on Hugging Face keep only a classification head, which
+# Ollama cannot run.
+FROM .
+PARAMETER temperature 0
