@@ -37,7 +37,8 @@ internal static class IngestCommand
             using var generator = Clients.Embeddings(settings.Ollama);
             var embedder = new Embedder(generator, EmbeddingProfile.For(settings.Ollama.EmbeddingModel));
             var indexer = new Indexer(new FixedSizeChunker(result.GetValue(chunkSize), result.GetValue(chunkOverlap)), embedder,
-                new ChunkStore(qdrant, settings.Qdrant.Collection)) { Recreate = result.GetValue(recreate) };
+                new ChunkStore(qdrant, settings.Qdrant.Collection))
+            { Recreate = result.GetValue(recreate) };
 
             var watch = Stopwatch.StartNew();
             int documents = 0, chunks = 0;
