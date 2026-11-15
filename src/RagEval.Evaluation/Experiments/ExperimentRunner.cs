@@ -10,6 +10,13 @@ using RagEval.Evaluation.Metrics;
 
 namespace RagEval.Evaluation.Experiments;
 
+/// <summary>A run ready to query: its indexes exist; disposing releases the embedding client.</summary>
+public sealed record PreparedRun(IChunker Chunker, Embedder? Embedder, IRetriever Retriever, IReranker? Reranker, IndexResult Index,
+    IDisposable? Resources) : IDisposable
+{
+    public void Dispose() => Resources?.Dispose();
+}
+
 /// <summary>Runs every run of an experiment on every dataset and collects the results.</summary>
 public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, Func<string, CancellationToken, Task<EvalDataset>> loadDataset)
 {
@@ -83,36 +90,9 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
 
     private async Task<RunResult> RunOneAsync(EvalDataset dataset, RunConfig run, CancellationToken cancellationToken)
     {
+        using var prepared = await PrepareAsync(dataset, run, cancellationToken);
+        var (embedder, retriever, reranker, index) = (prepared.Embedder, prepared.Retriever, prepared.Reranker, prepared.Index);
         var retrieval = run.Retrieval;
-        if (!UsesDense(retrieval) && !UsesSparse(retrieval))
-        {
-            throw new NotSupportedException($"Unknown retrieval strategy '{retrieval.Strategy}'.");
-        }
-
-        var chunker = CreateChunker(run.Chunking);
-        using var generator = UsesDense(retrieval) ? EmbeddingsFor(run.Embedding.Model) : null;
-        var embedder = generator is null ? null : new Embedder(generator, EmbeddingProfile.For(run.Embedding.Model));
-
-        IndexResult? denseIndex = null, sparseIndex = null;
-        (ChunkStore, Bm25Encoder)? sparse = null;
-        if (embedder is not null)
-        {
-            denseIndex = await new CorpusIndex(qdrant, chunker, embedder).EnsureAsync(dataset, log: Log, cancellationToken: cancellationToken);
-            LogIndex(denseIndex);
-        }
-
-        if (UsesSparse(retrieval))
-        {
-            var (built, encoder) = await new SparseCorpusIndex(qdrant, chunker, TextAnalyzer.Parse(retrieval.Analyzer), retrieval.K1, retrieval.B)
-                .EnsureAsync(dataset, cancellationToken: cancellationToken);
-            LogIndex(built);
-            sparseIndex = built;
-            sparse = (new ChunkStore(qdrant, built.Collection), encoder);
-        }
-
-        var retriever = CreateRetriever(retrieval, denseIndex is null ? null : new ChunkStore(qdrant, denseIndex.Collection), sparse);
-        var index = Combine(denseIndex, sparseIndex);
-        var reranker = run.Rerank is null ? null : RerankerFor(run.Rerank);
         var depth = Math.Max(retrieval.Depth, run.Rerank?.Candidates ?? 0);
 
         var queries = QueryLimit is { } limit ? dataset.Queries.Take(limit).ToList() : dataset.Queries;
@@ -153,6 +133,53 @@ public sealed class ExperimentRunner(QdrantClient qdrant, OllamaOptions ollama, 
         }
 
         return Summarize(dataset.Info.Id, run, index, perQuery);
+    }
+
+    /// <summary>
+    /// Builds or reuses the indexes a run needs on a dataset, and the embedder, retriever and
+    /// reranker that query them. Dispose the result to release the model clients.
+    /// </summary>
+    public async Task<PreparedRun> PrepareAsync(EvalDataset dataset, RunConfig run, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(dataset);
+        ArgumentNullException.ThrowIfNull(run);
+        var retrieval = run.Retrieval;
+        if (!UsesDense(retrieval) && !UsesSparse(retrieval))
+        {
+            throw new NotSupportedException($"Unknown retrieval strategy '{retrieval.Strategy}'.");
+        }
+
+        var chunker = CreateChunker(run.Chunking);
+        var generator = UsesDense(retrieval) ? EmbeddingsFor(run.Embedding.Model) : null;
+        try
+        {
+            var embedder = generator is null ? null : new Embedder(generator, EmbeddingProfile.For(run.Embedding.Model));
+            IndexResult? denseIndex = null, sparseIndex = null;
+            (ChunkStore, Bm25Encoder)? sparse = null;
+            if (embedder is not null)
+            {
+                denseIndex = await new CorpusIndex(qdrant, chunker, embedder).EnsureAsync(dataset, log: Log, cancellationToken: cancellationToken);
+                LogIndex(denseIndex);
+            }
+
+            if (UsesSparse(retrieval))
+            {
+                var (built, encoder) = await new SparseCorpusIndex(qdrant, chunker, TextAnalyzer.Parse(retrieval.Analyzer), retrieval.K1, retrieval.B)
+                    .EnsureAsync(dataset, cancellationToken: cancellationToken);
+                LogIndex(built);
+                sparseIndex = built;
+                sparse = (new ChunkStore(qdrant, built.Collection), encoder);
+            }
+
+            var retriever = CreateRetriever(retrieval, denseIndex is null ? null : new ChunkStore(qdrant, denseIndex.Collection), sparse);
+            var reranker = run.Rerank is null ? null : RerankerFor(run.Rerank);
+            return new PreparedRun(chunker, embedder, retriever, reranker, Combine(denseIndex, sparseIndex), generator);
+        }
+        catch
+        {
+            generator?.Dispose();
+            throw;
+        }
     }
 
     private void LogIndex(IndexResult index) =>

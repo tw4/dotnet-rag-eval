@@ -1,0 +1,16 @@
+{
+  // #18: where does the time go, from indexing a document to answering a question?
+  "name": "latency",
+  "description": "Every stage timed on the same machine: 30 questions of the full Turkish set answered end to end after 3 warm-up questions, and 20 of its documents indexed one by one. Runs cover the baseline, the choices from #12–#15, a sparse pipeline without an embedding model, and a larger answering model.",
+  "dataset": "turkish-rag-eval-full",
+  "queries": 30,
+  "warmUp": 3,
+  "documents": 20,
+  "runs": [
+    { "name": "baseline: fixed-1000 + nomic, qwen3:4b", "chunking": { "strategy": "fixed", "size": 1000, "overlap": 200 }, "embedding": { "model": "nomic-embed-text" } },
+    { "name": "structural + embeddinggemma, qwen3:4b", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "embeddinggemma" } },
+    { "name": "bm25 prefix-5, qwen3:4b", "chunking": { "strategy": "structural", "size": 1000 }, "retrieval": { "strategy": "sparse", "analyzer": "prefix-5" } },
+    { "name": "structural + embeddinggemma + rerank-20, qwen3:4b", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "embeddinggemma" }, "rerank": { "model": "qwen3-reranker:0.6b", "candidates": 20 } },
+    { "name": "structural + embeddinggemma, qwen3:8b", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "embeddinggemma" }, "answering": { "chatModel": "qwen3:8b" } }
+  ]
+}

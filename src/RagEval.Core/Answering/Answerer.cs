@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 using RagEval.Core.Embeddings;
 using RagEval.Core.Indexing;
+using RagEval.Core.Telemetry;
 
 namespace RagEval.Core.Answering;
 
@@ -26,7 +27,7 @@ public sealed class AnsweringOptions
 /// Answers a question from retrieved chunks: retrieve the top-k, refuse if nothing is relevant,
 /// otherwise ask the model to answer only from the numbered context and cite it as [n].
 /// </summary>
-public sealed partial class Answerer(Embedder embedder, IRetriever retriever, IChatClient chat, AnsweringOptions options,
+public sealed partial class Answerer(Embedder? embedder, IRetriever retriever, IChatClient chat, AnsweringOptions options,
     ChatOptions? chatOptions = null)
 {
     /// <summary>The exact sentence the model is told to use when the context does not answer the question.</summary>
@@ -47,10 +48,16 @@ public sealed partial class Answerer(Embedder embedder, IRetriever retriever, IC
     public async Task<Answer> AskAsync(string question, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(question);
-        var vector = await embedder.EmbedQueryAsync(question, cancellationToken);
-        var retrieved = (await retriever.RetrieveAsync(question, vector, options.TopK, cancellationToken))
-            .Where(c => c.Score >= options.MinScore)
-            .ToList();
+        using var root = Stages.Start(Stages.Answer);
+        var vector = !retriever.NeedsQueryVector ? ReadOnlyMemory<float>.Empty
+            : embedder is not null ? await embedder.EmbedQueryAsync(question, cancellationToken)
+            : throw new InvalidOperationException($"The retriever '{retriever.Name}' needs query embeddings, but there is no embedder.");
+        List<RetrievedChunk> retrieved;
+        using (Stages.Start(Stages.Retrieve))
+        {
+            retrieved = [.. (await retriever.RetrieveAsync(question, vector, options.TopK, cancellationToken)).Where(c => c.Score >= options.MinScore)];
+        }
+
         if (retrieved.Count == 0)
         {
             return new Answer(RefusalSentence, true, NothingRetrieved, [], []);
@@ -61,7 +68,14 @@ public sealed partial class Answerer(Embedder embedder, IRetriever retriever, IC
             new(ChatRole.System, SystemPrompt),
             new(ChatRole.User, BuildPrompt(question, retrieved)),
         };
-        var response = await chat.GetResponseAsync(messages, chatOptions, cancellationToken);
+        ChatResponse response;
+        using (var generate = Stages.Start(Stages.Generate))
+        {
+            response = await chat.GetResponseAsync(messages, chatOptions, cancellationToken);
+            generate?.SetTag("output_tokens", response.Usage?.OutputTokenCount);
+            generate?.SetTag("input_tokens", response.Usage?.InputTokenCount);
+        }
+
         var text = StripThinking(response.Text).Trim();
 
         if (text.Contains(RefusalSentence, StringComparison.OrdinalIgnoreCase) || text.Length == 0)

@@ -2,6 +2,7 @@ using System.Globalization;
 using OllamaSharp;
 using OllamaSharp.Models;
 using RagEval.Core.Indexing;
+using RagEval.Core.Telemetry;
 
 namespace RagEval.Core.Reranking;
 
@@ -164,7 +165,12 @@ public sealed class RerankingRetriever(IRetriever inner, IReranker reranker, int
     {
         var retrieved = await inner.RetrieveAsync(query, queryVector, Math.Max(limit, candidates), cancellationToken);
         var head = retrieved.Take(candidates).Select(Rerank.Passage).ToList();
-        var scores = await reranker.ScoreAsync(query, head, cancellationToken);
+        IReadOnlyList<double> scores;
+        using (Stages.Start(Stages.Rerank))
+        {
+            scores = await reranker.ScoreAsync(query, head, cancellationToken);
+        }
+
         return [.. Rerank.Apply(retrieved, scores, candidates).Take(limit)];
     }
 }

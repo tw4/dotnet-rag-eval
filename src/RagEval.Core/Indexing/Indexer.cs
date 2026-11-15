@@ -1,6 +1,7 @@
 using RagEval.Core.Chunking;
 using RagEval.Core.Documents;
 using RagEval.Core.Embeddings;
+using RagEval.Core.Telemetry;
 
 namespace RagEval.Core.Indexing;
 
@@ -15,8 +16,16 @@ public sealed class Indexer(IChunker chunker, Embedder embedder, ChunkStore stor
     /// <summary>Indexes one document and returns its chunks.</summary>
     public async Task<IReadOnlyList<Chunk>> IndexAsync(Document document, CancellationToken cancellationToken = default)
     {
-        var chunks = chunker.Split(document);
+        ArgumentNullException.ThrowIfNull(document);
+        using var root = Stages.Start(Stages.Document);
+        IReadOnlyList<Chunk> chunks;
+        using (Stages.Start(Stages.Chunk))
+        {
+            chunks = chunker.Split(document);
+        }
+
         var vectors = await embedder.EmbedDocumentsAsync([.. chunks.Select(c => c.TextToEmbed)], cancellationToken);
+        using var storing = Stages.Start(Stages.Store);
         if (!_collectionReady)
         {
             var dimensions = vectors.Count > 0

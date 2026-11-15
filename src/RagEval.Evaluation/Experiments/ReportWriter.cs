@@ -7,7 +7,7 @@ namespace RagEval.Evaluation.Experiments;
 /// <summary>Writes an experiment's raw results (results.json) and a Markdown summary (summary.md).</summary>
 public static class ReportWriter
 {
-    private static readonly JsonSerializerOptions Json = new()
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -21,13 +21,13 @@ public static class ReportWriter
         Directory.CreateDirectory(directory);
         var json = Path.Combine(directory, "results.json");
         var markdown = Path.Combine(directory, "summary.md");
-        File.WriteAllText(json, JsonSerializer.Serialize(result, Json));
+        File.WriteAllText(json, JsonSerializer.Serialize(result, JsonOptions));
         File.WriteAllText(markdown, Markdown(result));
         return (json, markdown);
     }
 
     public static ExperimentResult Read(string path) =>
-        JsonSerializer.Deserialize<ExperimentResult>(File.ReadAllText(path), Json)
+        JsonSerializer.Deserialize<ExperimentResult>(File.ReadAllText(path), JsonOptions)
         ?? throw new InvalidDataException($"Cannot read results {path}.");
 
     public static string Markdown(ExperimentResult result)

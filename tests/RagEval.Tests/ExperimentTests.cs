@@ -43,7 +43,7 @@ public sealed class ExperimentTests : IDisposable
     public void The_committed_experiments_are_valid()
     {
         var folder = Path.Combine(Path.GetDirectoryName(DatasetManifest.FindDefault(AppContext.BaseDirectory))!, "..", "experiments");
-        var files = Directory.GetFiles(folder, "*.json");
+        var files = Directory.GetFiles(folder, "*.json").Where(f => !Path.GetFileName(f).StartsWith("latency", StringComparison.Ordinal)).ToArray();
         Assert.NotEmpty(files);
         Assert.All(files, f => ExperimentConfig.Load(f));
     }
@@ -62,24 +62,7 @@ public sealed class ExperimentTests : IDisposable
         Assert.Equal((low, high), Statistics.BootstrapCi95(values));   // fixed seed: reproducible
     }
 
-    private DatasetInfo WriteTinyDataset()
-    {
-        Directory.CreateDirectory(Path.Combine(_dir, "tiny", "qrels"));
-        Write("tiny/corpus.jsonl", """
-            {"_id": "pets", "title": "Pets", "text": "Cats sleep most of the day. Dogs enjoy long walks in the park."}
-            {"_id": "space", "title": "Space", "text": "The moon orbits the earth. Mars has two small moons called Phobos and Deimos."}
-            {"_id": "food", "title": "Food", "text": "Bread is baked from flour, water and yeast."}
-            """);
-        Write("tiny/queries.jsonl", """
-            {"_id": "q1", "text": "how many moons does mars have", "answer_span": "Mars has two small moons"}
-            {"_id": "q2", "text": "what do dogs enjoy", "answer_span": "Dogs enjoy long walks"}
-            """);
-        Write("tiny/qrels/test.jsonl", """
-            {"query-id": "q1", "corpus-id": "space", "score": 1}
-            {"query-id": "q2", "corpus-id": "pets", "score": 1}
-            """);
-        return new DatasetInfo("tiny", "tiny", "en", "t", "x", "x", "x", "beir-jsonl", "test", [], new DatasetSize(3, 2, 2));
-    }
+    private DatasetInfo WriteTinyDataset() => TinyDataset.Write(_dir);
 
     [Fact]
     public async Task Runs_sparse_and_hybrid_retrieval()
