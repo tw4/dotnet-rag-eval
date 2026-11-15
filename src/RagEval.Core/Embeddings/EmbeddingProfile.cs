@@ -16,6 +16,10 @@ public sealed record EmbeddingProfile(string Model, string DocumentPrefix, strin
         ("snowflake-arctic-embed", "", "Represent this sentence for searching relevant passages: "),
         ("e5", "passage: ", "query: "),
         ("multilingual-e5", "passage: ", "query: "),
+        // Qwen3-Embedding model card: documents as is, queries with a task instruction.
+        ("qwen3-embedding", "", "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"),
+        // EmbeddingGemma model card (ai.google.dev): retrieval prompts, "none" when there is no title.
+        ("embeddinggemma", "title: none | text: ", "task: search result | query: "),
     ];
 
     /// <summary>The profile for a model: known prefixes for its family, otherwise none.</summary>
