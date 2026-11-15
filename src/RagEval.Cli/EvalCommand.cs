@@ -14,6 +14,55 @@ internal static class EvalCommand
         command.Subcommands.Add(Run());
         command.Subcommands.Add(Latency());
         command.Subcommands.Add(Answers());
+        command.Subcommands.Add(LabelSample());
+        command.Subcommands.Add(AgreementCommand());
+        return command;
+    }
+
+    private static Command LabelSample()
+    {
+        var results = new Argument<FileInfo>("results") { Description = "results.json of an answer experiment" };
+        var output = new Option<FileInfo>("--out") { Description = "CSV to write", Required = true };
+        var count = new Option<int>("--count") { Description = "Answers in the sample", DefaultValueFactory = _ => 40 };
+        var seed = new Option<int>("--seed") { Description = "Random seed", DefaultValueFactory = _ => 17 };
+
+        var command = new Command("label-sample", "Export a random sample of judged answers for hand labelling (without the judge's verdicts).")
+        {
+            results, output, count, seed,
+        };
+        command.SetAction(async (result, cancellationToken) =>
+        {
+            var outcome = AnswerEvaluator.Read(result.GetValue(results)!.FullName);
+            var sample = Agreement.Sample(outcome, result.GetValue(count), result.GetValue(seed));
+            var path = result.GetValue(output)!.FullName;
+            Agreement.WriteSheet(sample, path);
+            await result.InvocationConfiguration.Output.WriteLineAsync(
+                $"Wrote {sample.Count} answers to {path}. Fill in faithfulness and correctness with yes, partial or no.");
+            return 0;
+        });
+        return command;
+    }
+
+    private static Command AgreementCommand()
+    {
+        var results = new Argument<FileInfo>("results") { Description = "results.json of an answer experiment" };
+        var labels = new Argument<FileInfo>("labels") { Description = "Labelled CSV (columns id, faithfulness, correctness)" };
+        var output = new Option<FileInfo?>("--out") { Description = "Also write the report to this Markdown file" };
+
+        var command = new Command("agreement", "Measure how well the judge agrees with human labels.") { results, labels, output };
+        command.SetAction(async (result, cancellationToken) =>
+        {
+            var outcome = AnswerEvaluator.Read(result.GetValue(results)!.FullName);
+            var agreement = Agreement.Compute(outcome, Agreement.ReadLabels(result.GetValue(labels)!.FullName));
+            var markdown = Agreement.Markdown(agreement, outcome.JudgeModel);
+            if (result.GetValue(output) is { } file)
+            {
+                await File.WriteAllTextAsync(file.FullName, markdown, cancellationToken);
+            }
+
+            await result.InvocationConfiguration.Output.WriteLineAsync(markdown);
+            return 0;
+        });
         return command;
     }
 
