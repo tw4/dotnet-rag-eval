@@ -1,0 +1,13 @@
+# Every model the experiments use, pinned by the digest Ollama reports for it (GET /api/tags).
+# Ollama tags can move upstream; scripts/pull-models.sh pulls each tag and fails if the digest
+# differs from the one the published results were produced with.
+#
+# name                     digest (sha256)                                                     role
+nomic-embed-text:latest    0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f    embedding (baseline)
+mxbai-embed-large:latest   468836162de7f81e041c43663fedbbba921dcea9b9fefea135685a39b2d83dd8    embedding
+bge-m3:latest              7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab    embedding
+qwen3-embedding:0.6b       ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d    embedding
+embeddinggemma:latest      85462619ee721b466c5927d109d4cb765861907d5417b9109caebc4e614679f1    embedding
+qwen3:4b                   359d7dd4bcdab3d86b87d73ac27966f4dbb9f5efdfcc75d34a8764a09474fae7    answers
+qwen3:8b                   500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41    judge
+qwen3-reranker:0.6b        9eabd13e02ee8c8345103701326a5bb51aed627ec6c38d4c18f7da34a0077dd1    reranker (imported, see models/qwen3-reranker)
