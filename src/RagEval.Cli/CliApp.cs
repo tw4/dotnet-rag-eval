@@ -13,6 +13,7 @@ internal static class CliApp
         root.Subcommands.Add(IngestCommand.Create());
         root.Subcommands.Add(AskCommand.Create());
         root.Subcommands.Add(DatasetsCommand.Create());
+        root.Subcommands.Add(EvalCommand.Create());
         return root;
     }
 }
