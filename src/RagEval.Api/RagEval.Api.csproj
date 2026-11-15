@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\RagEval.Core\RagEval.Core.csproj" />
+    <ProjectReference Include="..\RagEval.Ingestion\RagEval.Ingestion.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="RagEval.Tests" />
+  </ItemGroup>
+</Project>

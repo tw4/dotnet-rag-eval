@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Document loaders (Markdown, HTML, PDF) that keep source positions.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RagEval.Core\RagEval.Core.csproj" />
+  </ItemGroup>
+</Project>
