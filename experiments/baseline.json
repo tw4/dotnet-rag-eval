@@ -1,0 +1,14 @@
+{
+  // The v0.1 pipeline as shipped: the starting point every experiment is compared with.
+  "name": "baseline",
+  "description": "The v0.1 pipeline: fixed-size chunks of 1,000 characters with 200 overlap, nomic-embed-text, dense retrieval in Qdrant (cosine).",
+  "datasets": ["scifact", "turkish-rag-eval", "turkish-rag-eval-full"],
+  "runs": [
+    {
+      "name": "baseline (fixed-1000-200 / nomic-embed-text / dense)",
+      "chunking": { "strategy": "fixed", "size": 1000, "overlap": 200 },
+      "embedding": { "model": "nomic-embed-text" },
+      "retrieval": { "strategy": "dense", "depth": 100 }
+    }
+  ]
+}
