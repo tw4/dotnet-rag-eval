@@ -3,6 +3,10 @@
     <Description>Document loaders (Markdown, HTML, PDF) that keep source positions.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="AngleSharp" />
+    <PackageReference Include="Markdig" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\RagEval.Core\RagEval.Core.csproj" />
   </ItemGroup>
 </Project>
