@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RagEval.Api/RagEval.Api.csproj" />
+    <Project Path="src/RagEval.Cli/RagEval.Cli.csproj" />
+    <Project Path="src/RagEval.Core/RagEval.Core.csproj" />
+    <Project Path="src/RagEval.Ingestion/RagEval.Ingestion.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RagEval.Tests/RagEval.Tests.csproj" />
+  </Folder>
+</Solution>

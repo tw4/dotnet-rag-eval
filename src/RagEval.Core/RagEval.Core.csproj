@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Domain types and pipeline stages for on-premises RAG with measured stages.</Description>
+  </PropertyGroup>
+</Project>
