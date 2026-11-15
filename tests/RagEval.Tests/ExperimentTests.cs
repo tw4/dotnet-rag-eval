@@ -96,6 +96,9 @@ public sealed class ExperimentTests : IDisposable
                 new RunConfig { Name = "bm25", Chunking = chunking, Retrieval = new RetrievalConfig { Strategy = "sparse", Analyzer = "prefix-4" } },
                 new RunConfig { Name = "hybrid", Chunking = chunking, Embedding = new EmbeddingConfig { Model = "hash" },
                     Retrieval = new RetrievalConfig { Strategy = "hybrid", Analyzer = "prefix-4" } },
+                new RunConfig { Name = "bm25 + rerank", Chunking = chunking,
+                    Retrieval = new RetrievalConfig { Strategy = "sparse", Analyzer = "prefix-4", Depth = 2 },
+                    Rerank = new RerankConfig { Model = "overlap", Candidates = 5 } },
             ],
         };
         var embedded = new List<string>();
@@ -106,6 +109,7 @@ public sealed class ExperimentTests : IDisposable
                 embedded.Add(model);
                 return new HashingEmbeddingGenerator();
             },
+            RerankerFor = config => new WordOverlapReranker(),
         };
         var collections = new List<string>();
         try
@@ -124,13 +128,20 @@ public sealed class ExperimentTests : IDisposable
             Assert.Equal(sparse.Index.Chunks, hybrid.Index.Chunks);  // same chunks in both indexes
             Assert.True(hybrid.Index.VectorBytes > sparse.Index.VectorBytes);
 
+            var reranked = result.Runs[2];
+            Assert.Equal(1.0, reranked.Metrics["recall@10"]);
+            Assert.InRange(reranked.PerQuery[0].Top10Documents.Count, 1, 2);   // depth 2 (chunks) after reranking 5 candidates
+            Assert.NotNull(reranked.Rerank);
+            Assert.Null(sparse.Rerank);
+
             var again = await runner.RunAsync(experiment, TestContext.Current.CancellationToken);
             Assert.All(again.Runs, r => Assert.True(r.Index.Reused));
             Assert.Equal(sparse.Metrics["ndcg@10"], again.Runs[0].Metrics["ndcg@10"]);
 
             var (_, markdown) = ReportWriter.Write(result, Path.Combine(_dir, "out-hybrid"));
-            Assert.Contains("| bm25 | **1.000** |", await File.ReadAllTextAsync(markdown, TestContext.Current.CancellationToken),
-                StringComparison.Ordinal);
+            var md = await File.ReadAllTextAsync(markdown, TestContext.Current.CancellationToken);
+            Assert.Contains("| bm25 | **1.000** |", md, StringComparison.Ordinal);
+            Assert.Contains("Rerank p50 / p95 (ms) |", md, StringComparison.Ordinal);
         }
         finally
         {
@@ -186,6 +197,19 @@ public sealed class ExperimentTests : IDisposable
             {
                 await qdrant.DeleteCollectionAsync(collection, cancellationToken: CancellationToken.None);
             }
+        }
+    }
+
+    /// <summary>Scores a passage by the share of query words it contains.</summary>
+    private sealed class WordOverlapReranker : RagEval.Core.Reranking.IReranker
+    {
+        public string Name => "overlap";
+
+        public Task<IReadOnlyList<double>> ScoreAsync(string query, IReadOnlyList<string> passages, CancellationToken cancellationToken = default)
+        {
+            var words = query.ToLowerInvariant().Split(' ');
+            return Task.FromResult<IReadOnlyList<double>>(
+                [.. passages.Select(p => words.Count(w => p.Contains(w, StringComparison.OrdinalIgnoreCase)) / (double)words.Length)]);
         }
     }
 }
