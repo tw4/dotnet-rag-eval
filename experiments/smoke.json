@@ -1,13 +1,13 @@
 {
   // A fast end-to-end check of the evaluation itself: one small dataset, one run.
   "name": "smoke",
-  "description": "Smoke test: the baseline configuration on the 58 human-written Turkish questions.",
+  "description": "Smoke test: the chosen pipeline (structural chunks, embeddinggemma, dense retrieval) on the 58 human-written Turkish questions.",
   "datasets": ["turkish-rag-eval"],
   "runs": [
     {
-      "name": "fixed-1000-200 / nomic-embed-text / dense",
-      "chunking": { "strategy": "fixed", "size": 1000, "overlap": 200 },
-      "embedding": { "model": "nomic-embed-text" },
+      "name": "structural-1000 / embeddinggemma / dense",
+      "chunking": { "strategy": "structural", "size": 1000 },
+      "embedding": { "model": "embeddinggemma" },
       "retrieval": { "strategy": "dense", "depth": 100 }
     }
   ]
