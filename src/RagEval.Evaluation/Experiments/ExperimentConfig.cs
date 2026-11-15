@@ -63,6 +63,16 @@ public sealed record RerankConfig
     public int Parallelism { get; init; } = 4;
 }
 
+/// <summary>How answers are written, for experiments that generate them (latency, answer quality).</summary>
+public sealed record AnsweringConfig
+{
+    /// <summary>Ollama chat model.</summary>
+    public string ChatModel { get; init; } = "qwen3:4b";
+
+    /// <summary>Chunks given to the model.</summary>
+    public int TopK { get; init; } = 5;
+}
+
 /// <summary>One configuration of the pipeline to evaluate.</summary>
 public sealed record RunConfig
 {
@@ -75,6 +85,8 @@ public sealed record RunConfig
     public RetrievalConfig Retrieval { get; init; } = new();
 
     public RerankConfig? Rerank { get; init; }
+
+    public AnsweringConfig Answering { get; init; } = new();
 }
 
 /// <summary>An experiment: every run on every dataset. Read from <c>experiments/*.json</c>.</summary>

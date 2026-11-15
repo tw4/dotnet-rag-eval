@@ -1,4 +1,5 @@
 using RagEval.Core.Documents;
+using RagEval.Core.Telemetry;
 using RagEval.Ingestion.Loaders;
 
 namespace RagEval.Ingestion;
@@ -32,6 +33,7 @@ public sealed class DocumentReader
     {
         var loader = _byExtension.GetValueOrDefault(Path.GetExtension(path))
             ?? throw new NotSupportedException($"No loader for '{Path.GetExtension(path)}' files ({path}).");
+        using var stage = Stages.Start(Stages.Load);
         var content = await File.ReadAllBytesAsync(path, cancellationToken);
         var id = Path.GetRelativePath(root, path).Replace('\\', '/');
         return loader.Load(id, path, content);

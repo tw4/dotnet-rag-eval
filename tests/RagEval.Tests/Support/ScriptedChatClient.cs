@@ -16,7 +16,11 @@ internal sealed class ScriptedChatClient(Func<IReadOnlyList<ChatMessage>, string
     {
         var list = messages.ToList();
         Calls.Add(list);
-        return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, reply(list))));
+        var text = reply(list);
+        return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, text))
+        {
+            Usage = new UsageDetails { OutputTokenCount = text.Split(' ').Length },
+        });
     }
 
     public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using RagEval.Core.Telemetry;
 
 namespace RagEval.Core.Embeddings;
 
@@ -11,6 +12,7 @@ public sealed class Embedder(IEmbeddingGenerator<string, Embedding<float>> gener
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(texts);
+        using var stage = Stages.Start(Stages.EmbedDocuments);
         var vectors = new List<ReadOnlyMemory<float>>(texts.Count);
         foreach (var batch in texts.Chunk(batchSize))
         {
@@ -23,6 +25,7 @@ public sealed class Embedder(IEmbeddingGenerator<string, Embedding<float>> gener
 
     public async Task<ReadOnlyMemory<float>> EmbedQueryAsync(string query, CancellationToken cancellationToken = default)
     {
+        using var stage = Stages.Start(Stages.EmbedQuery);
         var embeddings = await generator.GenerateAsync([Profile.QueryPrefix + query], cancellationToken: cancellationToken);
         return embeddings[0].Vector;
     }
