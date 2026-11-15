@@ -12,6 +12,7 @@
     <ProjectReference Include="..\..\src\RagEval.Ingestion\RagEval.Ingestion.csproj" />
     <ProjectReference Include="..\..\src\RagEval.Api\RagEval.Api.csproj" />
     <ProjectReference Include="..\..\src\RagEval.Cli\RagEval.Cli.csproj" />
+    <ProjectReference Include="..\..\src\RagEval.Evaluation\RagEval.Evaluation.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

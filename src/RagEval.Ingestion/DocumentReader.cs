@@ -21,7 +21,7 @@ public sealed class DocumentReader
     }
 
     /// <summary>A reader with every built-in loader.</summary>
-    public static DocumentReader Default() => new([new MarkdownLoader(), new HtmlLoader()]);
+    public static DocumentReader Default() => new([new MarkdownLoader(), new HtmlLoader(), new PlainTextLoader()]);
 
     public IReadOnlyCollection<string> Extensions => _byExtension.Keys;
 

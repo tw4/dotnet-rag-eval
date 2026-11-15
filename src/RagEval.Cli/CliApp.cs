@@ -12,6 +12,7 @@ internal static class CliApp
         Settings.AddGlobalOptions(root);
         root.Subcommands.Add(IngestCommand.Create());
         root.Subcommands.Add(AskCommand.Create());
+        root.Subcommands.Add(DatasetsCommand.Create());
         return root;
     }
 }
