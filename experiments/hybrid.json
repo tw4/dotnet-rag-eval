@@ -1,0 +1,14 @@
+{
+  // #14: does BM25, alone or fused with dense retrieval, beat dense retrieval?
+  "name": "hybrid",
+  "description": "BM25 (sparse vectors in Qdrant with IDF), dense retrieval with the baseline and the best model from #13, and reciprocal rank fusion (k = 60, 100 candidates per side) of the two, on structural chunks of 1,000 characters. BM25 runs with a plain analyzer and with terms cut to their first five characters, a crude stemmer for Turkish suffixes.",
+  "datasets": ["scifact", "turkish-rag-eval", "turkish-rag-eval-full"],
+  "runs": [
+    { "name": "dense nomic-embed-text", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "nomic-embed-text" } },
+    { "name": "dense embeddinggemma", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "embeddinggemma" } },
+    { "name": "bm25 plain", "chunking": { "strategy": "structural", "size": 1000 }, "retrieval": { "strategy": "sparse", "analyzer": "plain" } },
+    { "name": "bm25 prefix-5", "chunking": { "strategy": "structural", "size": 1000 }, "retrieval": { "strategy": "sparse", "analyzer": "prefix-5" } },
+    { "name": "hybrid nomic + bm25 prefix-5", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "nomic-embed-text" }, "retrieval": { "strategy": "hybrid", "analyzer": "prefix-5" } },
+    { "name": "hybrid embeddinggemma + bm25 prefix-5", "chunking": { "strategy": "structural", "size": 1000 }, "embedding": { "model": "embeddinggemma" }, "retrieval": { "strategy": "hybrid", "analyzer": "prefix-5" } }
+  ]
+}
