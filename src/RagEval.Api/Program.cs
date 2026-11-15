@@ -23,6 +23,7 @@ app.MapGet("/health/ready", async (DependencyCheck check, CancellationToken ct) 
 });
 
 app.MapDocumentEndpoints();
+app.MapAskEndpoints();
 
 app.Run();
 

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using Qdrant.Client;
+using RagEval.Core.Answering;
 using RagEval.Core.Chunking;
 using RagEval.Core.Configuration;
 using RagEval.Core.Embeddings;
@@ -33,6 +34,13 @@ internal static class ServiceSetup
         services.AddSingleton(sp => new ChunkStore(sp.GetRequiredService<QdrantClient>(),
             sp.GetRequiredService<IOptions<QdrantOptions>>().Value.Collection));
         services.AddSingleton<Indexer>();
+
+        services.Configure<AnsweringOptions>(configuration.GetSection(AnsweringOptions.Section));
+        services.AddSingleton<IRetriever, DenseRetriever>();
+        services.AddSingleton(sp => Clients.Chat(sp.GetRequiredService<IOptions<OllamaOptions>>().Value));
+        services.AddSingleton(sp => new Answerer(sp.GetRequiredService<Embedder>(), sp.GetRequiredService<IRetriever>(),
+            sp.GetRequiredService<IChatClient>(), sp.GetRequiredService<IOptions<AnsweringOptions>>().Value,
+            Clients.DeterministicChatOptions()));
         return services;
     }
 }
