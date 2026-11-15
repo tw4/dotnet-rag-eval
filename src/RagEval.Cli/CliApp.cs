@@ -9,6 +9,8 @@ internal static class CliApp
     public static RootCommand Build()
     {
         var root = new RootCommand($"rag-eval {BuildInfo.Version}: on-premises RAG with every stage measured.");
+        Settings.AddGlobalOptions(root);
+        root.Subcommands.Add(IngestCommand.Create());
         return root;
     }
 }
