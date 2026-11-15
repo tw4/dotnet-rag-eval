@@ -1,0 +1,81 @@
+# Qdrant, Ollama (with the models pulled on first start) and the API:
+#
+#   docker compose up -d
+#   curl http://localhost:8080/health/ready
+#
+# On a Mac, Ollama in Docker cannot use the GPU. Run the Ollama app instead and point the
+# stack at it:  OLLAMA_URL=http://host.docker.internal:11434 docker compose up -d qdrant api
+# Settings can go in .env (see .env.example).
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.20.0-unprivileged
+    volumes:
+      - qdrant:/qdrant/storage
+    ports:
+      # Published on localhost only, for the CLI on the host.
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    healthcheck:
+      test: ["CMD", "bash", "-c", ":> /dev/tcp/127.0.0.1/6333"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.40.16
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    # For an NVIDIA GPU, uncomment:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+  # Pulls the embedding and chat models once, then exits.
+  models:
+    image: ollama/ollama:0.40.16
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c", "ollama pull \"$$EMBEDDING_MODEL\" && ollama pull \"$$CHAT_MODEL\""]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      CHAT_MODEL: ${CHAT_MODEL:-qwen3:4b}
+    restart: "no"
+
+  api:
+    build: .
+    image: dotnet-rag-eval-api:local
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      Qdrant__Url: http://qdrant:6333
+      Qdrant__GrpcUrl: http://qdrant:6334
+      Ollama__Url: ${OLLAMA_URL:-http://ollama:11434}
+      Ollama__EmbeddingModel: ${EMBEDDING_MODEL:-nomic-embed-text}
+      Ollama__ChatModel: ${CHAT_MODEL:-qwen3:4b}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+
+volumes:
+  qdrant:
+  ollama:
