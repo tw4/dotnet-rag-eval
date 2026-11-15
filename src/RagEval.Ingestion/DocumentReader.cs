@@ -21,7 +21,7 @@ public sealed class DocumentReader
     }
 
     /// <summary>A reader with every built-in loader.</summary>
-    public static DocumentReader Default() => new([new MarkdownLoader(), new HtmlLoader(), new PlainTextLoader()]);
+    public static DocumentReader Default() => new([new MarkdownLoader(), new HtmlLoader(), new PlainTextLoader(), new PdfLoader()]);
 
     public IReadOnlyCollection<string> Extensions => _byExtension.Keys;
 
@@ -32,7 +32,7 @@ public sealed class DocumentReader
     {
         var loader = _byExtension.GetValueOrDefault(Path.GetExtension(path))
             ?? throw new NotSupportedException($"No loader for '{Path.GetExtension(path)}' files ({path}).");
-        var content = await File.ReadAllTextAsync(path, cancellationToken);
+        var content = await File.ReadAllBytesAsync(path, cancellationToken);
         var id = Path.GetRelativePath(root, path).Replace('\\', '/');
         return loader.Load(id, path, content);
     }

@@ -21,6 +21,8 @@ internal static class ServiceSetup
 
         services.AddSingleton<IDocumentLoader, MarkdownLoader>();
         services.AddSingleton<IDocumentLoader, HtmlLoader>();
+        services.AddSingleton<IDocumentLoader, PlainTextLoader>();
+        services.AddSingleton<IDocumentLoader, PdfLoader>();
         services.AddSingleton(sp => Clients.Qdrant(sp.GetRequiredService<IOptions<QdrantOptions>>().Value));
         services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(sp =>
             Clients.Embeddings(sp.GetRequiredService<IOptions<OllamaOptions>>().Value));

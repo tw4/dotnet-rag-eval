@@ -13,7 +13,7 @@ internal static class IngestCommand
 {
     public static Command Create()
     {
-        var folder = new Argument<DirectoryInfo>("folder") { Description = "Folder with Markdown and HTML files (searched recursively)" };
+        var folder = new Argument<DirectoryInfo>("folder") { Description = "Folder with Markdown, HTML, text and PDF files (searched recursively)" };
         var chunkSize = new Option<int>("--chunk-size") { Description = "Largest chunk, in characters", DefaultValueFactory = _ => 1000 };
         var chunkOverlap = new Option<int>("--chunk-overlap") { Description = "Characters shared by consecutive chunks", DefaultValueFactory = _ => 200 };
         var recreate = new Option<bool>("--recreate") { Description = "Delete the collection first" };
